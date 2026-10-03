@@ -3,7 +3,7 @@
 // Google ログイン用の OAuth クライアント ID。
 // クライアント ID は秘密情報ではない（ブラウザに必ず露出する）のでここに直接書いてよい。
 // 空のままでもアプリは「この端末だけに保存するモード」で動く。
-export const GOOGLE_CLIENT_ID = "";
+export const GOOGLE_CLIENT_ID = "83980971432-924op2tr2lcjfp9ss2nlmoasl315oh0l.apps.googleusercontent.com";
 
 /** ドライブには「このアプリが作ったファイル」だけ触れる権限で接続する */
 export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";

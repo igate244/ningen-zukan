@@ -266,6 +266,8 @@ export const SettingsPage = () => {
           人間図鑑 ・ 版 {__APP_VERSION__}
           <br />
           サーバーを持たないアプリです。データは端末の中と、つないだ場合は自分の Google ドライブにだけ保存されます。
+          <br />
+          <a href="./privacy.html" target="_blank" rel="noreferrer">プライバシーポリシー</a>
         </div>
       </div>
     </>
