@@ -34,20 +34,23 @@ const SyncBadge = () => {
   );
 };
 
-const TabShell = ({ title, active, children }: { title: string; active: string; children: ReactNode }) => (
+const TabBar = ({ active }: { active: string }) => (
+  <nav className="tabbar">
+    <div className="tabbar-inner">
+      {TABS.map((t) => (
+        <button type="button" key={t.path} className={`tab ${active === t.path ? "active" : ""}`} onClick={() => navigate(`/${t.path}`)}>
+          <Icon name={t.icon} size={22} />
+          {t.label}
+        </button>
+      ))}
+    </div>
+  </nav>
+);
+
+const TabShell = ({ title, children }: { title: string; active: string; children: ReactNode }) => (
   <>
     <TopBar title={title} right={<SyncBadge />} />
     <main className="main">{children}</main>
-    <nav className="tabbar">
-      <div className="tabbar-inner">
-        {TABS.map((t) => (
-          <button type="button" key={t.path} className={`tab ${active === t.path ? "active" : ""}`} onClick={() => navigate(`/${t.path}`, true)}>
-            <Icon name={t.icon} size={22} />
-            {t.label}
-          </button>
-        ))}
-      </div>
-    </nav>
   </>
 );
 
@@ -93,6 +96,8 @@ export const App = () => {
     <div className="app">
       {location.hostname.endsWith("github.io") && <MovedBanner />}
       {page}
+      {/* 下のタブはどの画面でも出す（人や記録の画面では、来た元のタブを光らせる） */}
+      <TabBar active={a === "p" || a === "new" ? "" : a === "log" ? "logs" : (a ?? "")} />
     </div>
   );
 };
