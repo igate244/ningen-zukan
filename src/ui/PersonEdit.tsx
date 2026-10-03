@@ -355,7 +355,7 @@ export const PersonEdit = ({ id }: { id?: string }) => {
         {/* ---- 自分からの気持ち */}
         {!p.isSelf && (
           <Group title="自分からの気持ち" footer="この欄は自分だけが見るもの。タップで選び、もう一度タップで解除">
-            <FeelingMeter like={p.like} trust={p.trust} onChange={(patch) => setP((cur) => ({ ...cur, ...patch }))} />
+            <FeelingMeter bare person={p} onChange={(patch) => setP((cur) => ({ ...cur, ...patch }))} />
           </Group>
         )}
 

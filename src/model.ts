@@ -87,6 +87,14 @@ export interface Person extends Base {
   like?: number;
   /** 自分からの信頼度（1 不安〜5 すごく頼れる） */
   trust?: number;
+  /** 尊敬（1〜5） */
+  respect?: number;
+  /** 一緒にいるときの居心地（1〜5） */
+  comfort?: number;
+  /** 価値観の近さ（1〜5） */
+  valueFit?: number;
+  /** 周りや自分の仕事への影響の大きさ（1〜5） */
+  influence?: number;
   /** 自分自身を表す特別な人物 */
   isSelf?: boolean;
 
@@ -227,6 +235,17 @@ export const IMPRESSION_ICON: Record<Impression, string> = { good: "😊", neutr
 
 export const LIKE_LABEL = ["", "嫌い", "苦手", "ふつう", "好き", "大好き"];
 export const TRUST_LABEL = ["", "不安", "やや不安", "ふつう", "頼れる", "すごく頼れる"];
+
+export type FeelKey = "like" | "trust" | "respect" | "comfort" | "valueFit" | "influence";
+/** 自分から見たその人の 6 つの軸（レーダーチャートの並び順） */
+export const FEEL_AXES: Array<{ key: FeelKey; label: string; levels: string[] }> = [
+  { key: "like", label: "好意", levels: LIKE_LABEL },
+  { key: "trust", label: "信頼", levels: TRUST_LABEL },
+  { key: "respect", label: "尊敬", levels: ["", "しない", "あまり", "ふつう", "尊敬する", "とても尊敬"] },
+  { key: "comfort", label: "居心地", levels: ["", "悪い", "やや悪い", "ふつう", "良い", "とても良い"] },
+  { key: "valueFit", label: "価値観", levels: ["", "合わない", "ややずれる", "ふつう", "近い", "とても近い"] },
+  { key: "influence", label: "影響", levels: ["", "小さい", "やや小さい", "ふつう", "大きい", "とても大きい"] },
+];
 
 /** 好き × 信頼 の組み合わせから、付き合い方のタイプを一言で */
 export const feelingType = (like?: number, trust?: number): string | null => {

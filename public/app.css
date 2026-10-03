@@ -391,7 +391,7 @@ a { color: var(--accent); }
 .feel { background: var(--surface); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); margin-top: 14px; }
 .fgroup .feel { box-shadow: none; margin-top: 0; border-radius: 0; }
 .feel-row { display: flex; align-items: center; gap: 10px; min-height: 40px; }
-.feel-label { width: 34px; flex: none; font-size: 13px; font-weight: 700; color: var(--text-2); }
+.feel-label { width: 44px; flex: none; font-size: 13px; font-weight: 700; color: var(--text-2); }
 .feel-scale { display: flex; gap: 5px; flex: 1; max-width: 230px; }
 .feel-step { flex: 1; height: 22px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); padding: 0; }
 .feel-step.fill.lv1, .feel-value.lv1 { --fc: #b4423a; }
@@ -407,3 +407,6 @@ a { color: var(--accent); }
 .feel-recent span.i { font-size: 16px; }
 .like-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--fc); }
 .like-dot.lv1 { --fc: #b4423a; } .like-dot.lv2 { --fc: #d08a4a; } .like-dot.lv3 { --fc: #9a9a9a; } .like-dot.lv4 { --fc: #4f9a8e; } .like-dot.lv5 { --fc: #2f6f6a; }
+.feel.bare { border-radius: 0; box-shadow: none; margin-top: 0; padding: 4px 0 0; background: transparent; }
+.fgroup .feel.bare { padding: 6px 14px; background: var(--surface); }
+.radar .feel.bare { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }

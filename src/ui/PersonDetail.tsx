@@ -102,7 +102,7 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
 
         {!person.isSelf && (
           <>
-            <FeelingMeter like={person.like} trust={person.trust} onChange={(patch) => void savePerson({ ...person, ...patch })} />
+            <FeelingMeter person={person} keys={["like", "trust"]} onChange={(patch) => void savePerson({ ...person, ...patch })} />
             {recentImpressions.length > 0 && (
               <div className="feel-recent" style={{ margin: "0 14px" }}>
                 最近の印象
@@ -158,7 +158,7 @@ const InfoTab = ({ person: p }: { person: Person }) => {
     <>
       {!p.isSelf && (
         <div className="section">
-          <div className="section-title">自分との関係</div>
+          <div className="section-title">自分から見たこの人</div>
           <RelationRadar person={p} />
         </div>
       )}

@@ -1,6 +1,6 @@
-// src/ui/Feeling.tsx — 自分からの「好き」「信頼」の 5 段階メーター
+// src/ui/Feeling.tsx — 自分から見たその人の 5 段階メーター（好意・信頼・尊敬・居心地・価値観・影響）
 
-import { LIKE_LABEL, TRUST_LABEL, feelingType } from "../model";
+import { FEEL_AXES, type FeelKey, type Person, feelingType } from "../model";
 
 const Scale = ({ label, value, labels, onChange }: { label: string; value?: number; labels: string[]; onChange: (v: number | undefined) => void }) => (
   <div className="feel-row">
@@ -16,12 +16,19 @@ const Scale = ({ label, value, labels, onChange }: { label: string; value?: numb
   </div>
 );
 
-export const FeelingMeter = ({ like, trust, onChange }: { like?: number; trust?: number; onChange: (patch: { like?: number; trust?: number }) => void }) => {
-  const type = feelingType(like, trust);
+export const FeelingMeter = ({ person, keys, onChange, bare }: {
+  person: Pick<Person, FeelKey>;
+  keys?: FeelKey[];
+  onChange: (patch: Partial<Pick<Person, FeelKey>>) => void;
+  bare?: boolean;
+}) => {
+  const axes = keys ? FEEL_AXES.filter((a) => keys.includes(a.key)) : FEEL_AXES;
+  const type = feelingType(person.like, person.trust);
   return (
-    <div className="feel">
-      <Scale label="好き" value={like} labels={LIKE_LABEL} onChange={(v) => onChange({ like: v })} />
-      <Scale label="信頼" value={trust} labels={TRUST_LABEL} onChange={(v) => onChange({ trust: v })} />
+    <div className={bare ? "feel bare" : "feel"}>
+      {axes.map((a) => (
+        <Scale key={a.key} label={a.label} value={person[a.key]} labels={a.levels} onChange={(v) => onChange({ [a.key]: v })} />
+      ))}
       {type && <div className="feel-type">{type}</div>}
     </div>
   );
