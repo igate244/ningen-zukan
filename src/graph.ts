@@ -25,6 +25,8 @@ export interface GEdge {
   kind: "family" | "work" | "friend" | "other" | "spouse" | "exspouse";
   /** 中心からたどった線以外（相関図では薄く描く） */
   faint?: boolean;
+  /** 弧を描いて、間にいる人の上を越える */
+  curve?: number;
 }
 
 /** 家系図の「開く・たたむ」ボタン */
@@ -120,7 +122,7 @@ const relaxAngles = (want: Map<string, number>, gap: number): Map<string, number
 export const buildRadial = (data: AppData, centerId: string, maxDepth: 1 | 2): Graph => {
   const { persons, rels, adj } = aliveIndex(data);
   const fx = familyIndex(data);
-  const label = (r: Relation, viewer: string, o: string): string => kinLabel(fx, viewer, o) ?? relationLabelFrom(r, viewer);
+  const label = (r: Relation, viewer: string, o: string): string => (r.labelBy === viewer ? r.label : undefined) ?? kinLabel(fx, viewer, o) ?? relationLabelFrom(r, viewer);
   const center = persons.get(centerId);
   if (!center) return { nodes: [], edges: [], width: 0, height: 0 };
 
@@ -489,7 +491,12 @@ export const buildFamily = (
     x: x.get(id)! - midX,
     y: gen.get(id)! * Y_GAP - midY,
     depth: Math.abs(gen.get(id)!),
-    sub: id === centerId ? undefined : kinLabel(fx, centerId, id) ?? undefined,
+    sub:
+      id === centerId
+        ? undefined
+        : rels.find((r) => r.label && r.labelBy === centerId && ((r.a === centerId && r.b === id) || (r.b === centerId && r.a === id)))?.label ??
+          kinLabel(fx, centerId, id) ??
+          undefined,
   }));
   const pos = new Map(nodes.map((n) => [n.id, n]));
 
@@ -631,7 +638,7 @@ export const buildCombined = (data: AppData, centerId: string, maxDepth: 1 | 2, 
   const colL = Math.min(...famXs) - 150;
   const colR = Math.max(...famXs) + 150;
   const ROW = 96;
-  const label = (r: Relation, viewer: string, o: string): string => kinLabel(fx, viewer, o) ?? relationLabelFrom(r, viewer);
+  const label = (r: Relation, viewer: string, o: string): string => (r.labelBy === viewer ? r.label : undefined) ?? kinLabel(fx, viewer, o) ?? relationLabelFrom(r, viewer);
 
   const placeCol = (list: typeof ring1, colX: number, outward: number): void => {
     list.forEach(({ id, r }, i) => {
@@ -667,7 +674,13 @@ export const buildCombined = (data: AppData, centerId: string, maxDepth: 1 | 2, 
     if (!nonFam(r) || !pos.has(r.a) || !pos.has(r.b)) continue;
     const a = pos.get(r.a)!;
     const b = pos.get(r.b)!;
-    edges.push({ id: r.id, rel: r, kind: edgeKind(r.type), points: [[a.x, a.y], [b.x, b.y]], faint: r.a !== centerId && r.b !== centerId && a.depth !== 1 && b.depth !== 1 });
+    // 家系図の人の上を通らないよう、中心からの線は上に弧を描く
+    const between = nodes.some((n) => n !== a && n !== b && Math.abs(n.y - a.y) < 40 && (n.x - a.x) * (n.x - b.x) < 0);
+    edges.push({
+      id: r.id, rel: r, kind: edgeKind(r.type), points: [[a.x, a.y], [b.x, b.y]],
+      faint: r.a !== centerId && r.b !== centerId && a.depth !== 1 && b.depth !== 1,
+      curve: between ? 110 : undefined,
+    });
   }
 
   // 中心を原点に寄せる

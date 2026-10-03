@@ -4,11 +4,11 @@ import { type ReactNode, useMemo, useState } from "react";
 import { age, daysToBirthday, formatDate, formatMonthDay, sinceLabel, today } from "../dates";
 import {
   CATEGORY_LABEL, type CheckItem, type Favor, GENDER_LABEL, LOG_KIND_LABEL, type Person, RELATION_CHOICES, type RelType,
-  newId, relationLabelFrom, selfLabel,
+  newId, type Relation, relationLabelFrom, selfLabel,
 } from "../model";
 import { navigate } from "../router";
 import { alive, deleteRelation, lastMetMap, saveRelation, savePerson, useData } from "../store";
-import { Avatar, Icon, PersonPicker, TopBar } from "./common";
+import { Avatar, Field, Icon, PersonPicker, TopBar } from "./common";
 import { GraphView } from "./GraphView";
 import { buildCombined } from "../graph";
 import {
@@ -424,6 +424,7 @@ const LinksTab = ({ person }: { person: Person }) => {
   const data = useData();
   const [picking, setPicking] = useState(false);
   const [choice, setChoice] = useState(RELATION_CHOICES[0].key);
+  const [editing, setEditing] = useState<Relation | null>(null);
 
   const rels = useMemo(
     () => alive(data.relations).filter((r) => r.a === person.id || r.b === person.id),
@@ -481,17 +482,19 @@ const LinksTab = ({ person }: { person: Person }) => {
                   <Avatar person={other} size={36} />
                   <div className="row-main">
                     <div className="row-name">{other.isSelf ? "自分" : other.name}</div>
-                    <div className="row-sub">{kinLabel(fx, person.id, other.id) ?? relationLabelFrom(r, person.id)}</div>
+                    <div className="row-sub">{(r.labelBy === person.id ? r.label : undefined) ?? kinLabel(fx, person.id, other.id) ?? relationLabelFrom(r, person.id)}{r.note ? ` ・ ${r.note}` : ""}</div>
                   </div>
                 </button>
-                <button type="button" className="icon-btn" aria-label="つながりを外す" onClick={() => void deleteRelation(r.id)}>
-                  <Icon name="close" size={16} />
+                <button type="button" className="icon-btn" aria-label="つながりを編集" onClick={() => setEditing(r)}>
+                  <Icon name="edit" size={16} />
                 </button>
               </div>
             );
           })}
         </div>
       )}
+
+      {editing && <RelationEditSheet rel={editing} viewerId={person.id} onClose={() => setEditing(null)} />}
 
       {picking && (
         <PersonPicker
@@ -505,5 +508,95 @@ const LinksTab = ({ person }: { person: Person }) => {
         />
       )}
     </>
+  );
+};
+
+// ------------------------------------------------------------ つながりの編集
+
+/** 今のつながりが「相手は（この人の）◯◯」のどれに当たるか */
+const choiceOf = (r: Relation, viewerId: string): string => {
+  const otherId = r.a === viewerId ? r.b : r.a;
+  const hit = RELATION_CHOICES.find((c) => c.type === r.type && (c.otherIsA ? r.a === otherId : r.b === otherId));
+  return hit?.key ?? RELATION_CHOICES.find((c) => c.type === r.type)?.key ?? "other";
+};
+
+const RelationEditSheet = ({ rel, viewerId, onClose }: { rel: Relation; viewerId: string; onClose: () => void }) => {
+  const data = useData();
+  const viewer = data.persons.find((p) => p.id === viewerId);
+  const [otherId, setOtherId] = useState(rel.a === viewerId ? rel.b : rel.a);
+  const [choice, setChoice] = useState(choiceOf(rel, viewerId));
+  const [label, setLabel] = useState(rel.labelBy === viewerId ? (rel.label ?? "") : "");
+  const [note, setNote] = useState(rel.note ?? "");
+  const [picking, setPicking] = useState(false);
+  const other = data.persons.find((p) => p.id === otherId);
+
+  const save = async (): Promise<void> => {
+    const c = RELATION_CHOICES.find((x) => x.key === choice) ?? RELATION_CHOICES[0];
+    const [a, b] = c.otherIsA ? [otherId, viewerId] : [viewerId, otherId];
+    await saveRelation({ ...rel, a, b, type: c.type, label: label.trim() || undefined, labelBy: label.trim() ? viewerId : undefined, note: note.trim() || undefined });
+    onClose();
+  };
+  const remove = async (): Promise<void> => {
+    if (!window.confirm("このつながりを外しますか？")) return;
+    await deleteRelation(rel.id);
+    onClose();
+  };
+
+  return (
+    <div className="sheet-back" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head">
+          <h2>つながりを編集</h2>
+          <button type="button" className="text-btn" onClick={() => void save()}>保存</button>
+        </div>
+        <div className="sheet-body">
+          <div className="form">
+            <div className="small muted">
+              {viewer ? selfLabel(viewer) : ""} から見て、相手は…
+            </div>
+            <Field label="相手">
+              <button type="button" className="map-center" onClick={() => setPicking(true)}>
+                <Avatar person={other} size={28} />
+                <span className="map-center-name">{other ? selfLabel(other) : "選ぶ"}</span>
+                <Icon name="down" size={16} />
+              </button>
+            </Field>
+            <Field label="関係">
+              <div className="chips" style={{ paddingTop: 0, flexWrap: "wrap" }}>
+                {RELATION_CHOICES.map((c) => (
+                  <button type="button" key={c.key} className={`chip ${choice === c.key ? "on" : ""}`} onClick={() => setChoice(c.key)}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="呼び方（任意）" hint="「叔父」「義兄」「師匠」など、自動の呼び名の代わりに出したいとき">
+              <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} />
+            </Field>
+            <Field label="メモ（任意）">
+              <textarea className="textarea" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+            </Field>
+            <button type="button" className="btn primary" onClick={() => void save()}>保存</button>
+            <button type="button" className="btn danger" onClick={() => void remove()}>
+              <Icon name="trash" size={16} /> このつながりを外す
+            </button>
+          </div>
+        </div>
+      </div>
+      {picking && (
+        <PersonPicker
+          title="相手を選ぶ"
+          multiple={false}
+          includeSelf
+          selected={[]}
+          excludeIds={[viewerId]}
+          onDone={(ids) => {
+            if (ids[0]) setOtherId(ids[0]);
+            setPicking(false);
+          }}
+          onClose={() => setPicking(false)}
+        />
+      )}
+    </div>
   );
 };

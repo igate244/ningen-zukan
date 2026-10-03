@@ -185,6 +185,14 @@ export const GraphView = ({
                 </g>
               );
             }
+            if (e.curve) {
+              const [[x1, y1], [x2, y2]] = e.points;
+              const cy = Math.min(y1, y2) - e.curve;
+              return (
+                <path key={e.id} d={`M${x1},${y1} Q${(x1 + x2) / 2},${cy} ${x2},${y2}`} fill="none" stroke={st.color}
+                  strokeWidth={st.width} strokeDasharray={st.dash} opacity={e.faint ? 0.22 : 1} strokeLinecap="round" />
+              );
+            }
             return (
               <polyline
                 key={e.id}

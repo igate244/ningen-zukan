@@ -133,13 +133,15 @@ export interface Relation extends Base {
   a: string;
   b: string;
   type: RelType;
+  /** 呼び方（labelBy の人から見た相手の呼び名） */
   label?: string;
+  labelBy?: string;
   note?: string;
 }
 
 /** ある人から見た相手の呼び名 */
 export const relationLabelFrom = (rel: Relation, viewerId: string): string => {
-  if (rel.label) return rel.label;
+  if (rel.label && rel.labelBy === viewerId) return rel.label;
   const isA = rel.a === viewerId;
   switch (rel.type) {
     case "parent":
