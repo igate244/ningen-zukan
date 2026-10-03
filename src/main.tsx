@@ -2,6 +2,7 @@
 
 import { createRoot } from "react-dom/client";
 import { load } from "./store";
+import { startPush } from "./push";
 import { startAutoSync } from "./sync";
 import { App } from "./ui/App";
 
@@ -22,6 +23,7 @@ const boot = async (): Promise<void> => {
   }
   root.render(<App />);
   void startAutoSync();
+  void startPush();
 };
 
 void boot();

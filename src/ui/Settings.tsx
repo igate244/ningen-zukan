@@ -5,6 +5,7 @@ import { isConfigured } from "../drive";
 import { type AppData, type Category, CATEGORIES, type Person, type Relation, SELF_ID, emptyPerson, newId } from "../model";
 import { navigate } from "../router";
 import { alive, getData, replaceAll, useData } from "../store";
+import { disablePush, enablePush, testPush, usePushState } from "../push";
 import { connect, disconnect, mergeData, reconnect, syncNow, useSyncState } from "../sync";
 import { Icon } from "./common";
 
@@ -88,6 +89,7 @@ const importFromMyme = (json: Record<string, unknown>): { added: number; skipped
 export const SettingsPage = () => {
   const data = useData();
   const sync = useSyncState();
+  const push = usePushState();
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -167,6 +169,35 @@ export const SettingsPage = () => {
               </div>
             </>
           )}
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="section-title">誕生日の通知</div>
+        <div className="card fieldset">
+          <div className="small">
+            誕生日の<strong>前日21時</strong>と<strong>当日朝7時</strong>にスマホへ通知します。
+            <br />
+            <span className="muted">
+              通知の配達サーバーに渡すのは「誕生日の月日」と「通知の宛先」だけで、名前は送りません。文面はこの端末の中で作ります。
+            </span>
+          </div>
+          {push.status === "unsupported" ? (
+            <div className="small muted">この端末・ブラウザは通知に対応していません。ホーム画面に入れたアプリから開くと使えることがあります。</div>
+          ) : push.status === "on" ? (
+            <div className="actions" style={{ marginTop: 0 }}>
+              <button type="button" className="btn" onClick={() => void testPush()}>テスト通知</button>
+              <button type="button" className="btn" onClick={() => void disablePush()}>オフにする</button>
+            </div>
+          ) : (
+            <button type="button" className="btn primary" disabled={push.status === "working"} onClick={() => void enablePush()}>
+              {push.status === "working" ? "設定中…" : "通知をオンにする"}
+            </button>
+          )}
+          {push.status === "denied" && (
+            <div className="error">通知が許可されていません。スマホの設定 → アプリ → Chrome（または人間図鑑）→ 通知 を許可してください。</div>
+          )}
+          {push.status === "error" && <div className="error">{push.message}</div>}
         </div>
       </div>
 
