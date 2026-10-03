@@ -1,6 +1,7 @@
 // src/ui/Settings.tsx — ドライブ連携・書き出し / 読み込み・MYME からの取り込み
 
 import { useState } from "react";
+import * as db from "../db";
 import { isConfigured } from "../drive";
 import { type AppData, type Category, CATEGORIES, type Person, type Relation, SELF_ID, emptyPerson, newId, splitName } from "../model";
 import { navigate } from "../router";
@@ -18,6 +19,24 @@ const download = (name: string, text: string): void => {
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+/** 全データ＋写真（data URL）をひとつの JSON にする */
+const exportWithPhotos = async (): Promise<object> => {
+  const d = getData();
+  const photos: Record<string, string> = {};
+  for (const img of d.images) {
+    if (img.deleted) continue;
+    const blob = await db.getBlob(img.id);
+    if (!blob) continue;
+    photos[img.id] = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+  }
+  return { app: "ningen-zukan", version: 1, exportedAt: Date.now(), ...d, photos };
 };
 
 const stamp = (): string => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
@@ -114,9 +133,17 @@ export const SettingsPage = () => {
         const r = importFromMyme(json);
         setMsg(`MYME から ${r.added}人 取り込みました${r.skipped ? `（同名の ${r.skipped}人 は飛ばしました）` : ""}`);
       } else if (Array.isArray(json.persons)) {
+        // 写真の実体（あれば）を先に端末へ入れる
+        const photos = (json.photos ?? {}) as Record<string, string>;
+        let n = 0;
+        for (const [id, dataUrl] of Object.entries(photos)) {
+          const blob = await (await fetch(dataUrl)).blob();
+          await db.putBlob(id, blob);
+          n++;
+        }
         const merged = mergeData(getData(), json as unknown as AppData);
         await replaceAll(merged, true);
-        setMsg("読み込みました（新しい方の内容で合体）");
+        setMsg(`読み込みました（新しい方の内容で合体${n ? `・写真${n}枚` : ""}）`);
       } else {
         setMsg("このファイルは読み込めない形式でした");
       }
@@ -219,8 +246,11 @@ export const SettingsPage = () => {
         <div className="section-title">データ</div>
         <div className="card fieldset">
           <div className="small muted">登録 {persons}人 ・ 記録 {logs}件</div>
-          <button type="button" className="btn" onClick={() => download(`ningen-zukan_${stamp()}.json`, JSON.stringify({ app: "ningen-zukan", version: 1, ...getData() }, null, 1))}>
-            書き出し（JSON・写真は含まない）
+          <button type="button" className="btn" disabled={busy} onClick={() => void run(async () => {
+            download(`ningen-zukan_${stamp()}.json`, JSON.stringify(await exportWithPhotos()));
+            setMsg("書き出しました（写真も含む）");
+          })}>
+            書き出し（写真も含む・引っ越しやバックアップに）
           </button>
           <label className="btn" style={{ cursor: "pointer" }}>
             読み込み（この図鑑の JSON / MYME のバックアップ）

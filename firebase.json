@@ -1,0 +1,10 @@
+{
+  "hosting": {
+    "target": "app",
+    "public": "dist/app",
+    "ignore": ["**/.*"],
+    "headers": [
+      { "source": "**/*.@(js|css|html|webmanifest)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    ]
+  }
+}
