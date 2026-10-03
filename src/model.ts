@@ -96,6 +96,8 @@ export interface Person extends Base {
   gender?: Gender;
   birthDate?: string; // YYYY-MM-DD
   birthYearUnknown?: boolean;
+  /** 命日（亡くなった日） */
+  deathDate?: string;
   /** 兄弟姉妹の中で何番目に生まれたか（誕生日がわからないときの並び用） */
   birthOrder?: number;
   metDate?: string;
@@ -189,7 +191,7 @@ export const RELATION_CHOICES: Array<{ key: string; label: string; type: RelType
   { key: "other", label: "その他", type: "other", otherIsA: true },
 ];
 
-export const LOG_KINDS = ["meet", "talk", "meeting", "helped", "helping", "conflict", "other"] as const;
+export const LOG_KINDS = ["meet", "talk", "meeting", "helped", "helping", "conflict", "event", "other"] as const;
 export type LogKind = (typeof LOG_KINDS)[number];
 
 export const LOG_KIND_LABEL: Record<LogKind, string> = {
@@ -199,6 +201,7 @@ export const LOG_KIND_LABEL: Record<LogKind, string> = {
   helped: "助けてもらった",
   helping: "助けた",
   conflict: "ぶつかった",
+  event: "イベント・予定",
   other: "その他",
 };
 
@@ -207,6 +210,8 @@ export interface LogEntry extends Base {
   personIds: string[];
   kind: LogKind;
   text: string;
+  /** 毎年くり返す（結婚記念日など。イベントのときだけ使う） */
+  yearly?: boolean;
 }
 
 /** 画像の目録（同期対象）。実体の Blob は端末内の別テーブルにある */

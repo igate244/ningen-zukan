@@ -107,12 +107,12 @@ const Group = ({ title, children, footer }: { title?: string; children: ReactNod
 type FieldKey =
   | "nickname" | "org" | "dept" | "title" | "w.report" | "w.contact" | "w.timing" | "w.evaluates" | "w.strengths" | "careers"
   | "likes" | "dislikes" | "topics" | "values" | "learnings"
-  | "birthDate" | "birthOrder" | "metDate" | "metHow" | "phone" | "email" | "sns" | "note";
+  | "birthDate" | "deathDate" | "birthOrder" | "metDate" | "metHow" | "phone" | "email" | "sns" | "note";
 
 const SECTIONS: Array<{ title: string; keys: Array<[FieldKey, string]> }> = [
   { title: "仕事", keys: [["org", "会社・組織"], ["dept", "部署"], ["title", "役職"], ["w.report", "報告・相談の好み"], ["w.contact", "連絡手段"], ["w.timing", "つかまる時間"], ["w.evaluates", "評価する点"], ["w.strengths", "得意・頼れる"], ["careers", "所属の履歴"]] },
   { title: "取扱説明書", keys: [["likes", "好きなもの"], ["dislikes", "地雷"], ["topics", "盛り上がる話題"], ["values", "価値観・口ぐせ"], ["learnings", "学んだこと"]] },
-  { title: "誕生日・出会い", keys: [["birthDate", "誕生日"], ["birthOrder", "生まれ順"], ["metDate", "出会った日"], ["metHow", "きっかけ"]] },
+  { title: "誕生日・出会い", keys: [["birthDate", "誕生日"], ["birthOrder", "生まれ順"], ["metDate", "出会った日"], ["metHow", "きっかけ"], ["deathDate", "命日"]] },
   { title: "連絡先", keys: [["phone", "電話"], ["email", "メール"], ["sns", "SNS など"]] },
   { title: "その他", keys: [["nickname", "呼び名"], ["note", "メモ"]] },
 ];
@@ -260,6 +260,7 @@ export const PersonEdit = ({ id }: { id?: string }) => {
       case "birthOrder":
         return <Row key={k} label={label} type="number" inputMode="numeric" value={p.birthOrder ? String(p.birthOrder) : ""} placeholder="兄弟姉妹の何番目か（1＝長子）"
           onChange={(v) => set("birthOrder", v ? Number(v) : undefined)} autoFocus={af(k)} />;
+      case "deathDate": return <Row key={k} label={label} type="date" value={p.deathDate} onChange={(v) => set("deathDate", v || undefined)} autoFocus={af(k)} />;
       case "metDate": return <Row key={k} label={label} type="date" value={p.metDate} onChange={(v) => set("metDate", v)} autoFocus={af(k)} />;
       case "metHow": return <Row key={k} label={label} value={p.metHow} onChange={(v) => set("metHow", v)} list="dl-met" placeholder="入社 / 小学校 / 紹介 など" autoFocus={af(k)} />;
       case "phone": return <Row key={k} label={label} type="tel" inputMode="tel" value={p.phone} onChange={(v) => set("phone", v)} autoFocus={af(k)} />;

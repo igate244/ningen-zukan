@@ -43,7 +43,7 @@ const Node = ({ node, isCenter, onTap }: { node: GNode; isCenter: boolean; onTap
   const r = isCenter ? NODE_R + 8 : NODE_R;
   const clip = `clip-${node.id}`;
   // 全角の空白は詰めて、長い名前は省略して隣と重ならないようにする
-  const name = selfLabel(node.person).replace(/[\s\u3000]+/g, " ");
+  const name = `${node.person.deathDate ? "故 " : ""}${selfLabel(node.person).replace(/[\s\u3000]+/g, " ")}`;
   return (
     <g transform={`translate(${node.x},${node.y})`} className="g-node" onClick={() => onTap(node.id)} style={{ cursor: "pointer" }}>
       <clipPath id={clip}>

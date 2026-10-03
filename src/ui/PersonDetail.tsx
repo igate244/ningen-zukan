@@ -1,7 +1,7 @@
 // src/ui/PersonDetail.tsx — 1 人のページ（概要 / 取説 / 記録 / つながり）
 
 import { type ReactNode, useMemo, useState } from "react";
-import { age, daysToBirthday, formatDate, formatMonthDay, sinceLabel, today } from "../dates";
+import { age, ageAtDeath, daysToBirthday, formatDate, formatMonthDay, sinceLabel, today } from "../dates";
 import {
   CATEGORY_LABEL, type CheckItem, type Favor, GENDER_LABEL, LOG_KIND_LABEL, type Person, RELATION_CHOICES, type RelType,
   newId, type Mood, MOODS, MOOD_LABEL, type Relation, relationLabelFrom, selfLabel,
@@ -78,6 +78,7 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
           <div className="badges">
             {!person.isSelf && <span className="badge accent">{CATEGORY_LABEL[person.category]}</span>}
             {person.gender && <span className="badge">{GENDER_LABEL[person.gender]}</span>}
+            {person.deathDate && <span className="badge">故人</span>}
             {person.groups.map((gid) => {
               const g = (data.groups ?? []).find((x) => x.id === gid && !x.deleted);
               return g ? (
@@ -120,7 +121,9 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
 // ---------------------------------------------------------------------- 概要
 
 const InfoTab = ({ person: p }: { person: Person }) => {
-  const a = age(p.birthDate, p.birthYearUnknown);
+  const a = p.deathDate ? null : age(p.birthDate, p.birthYearUnknown);
+  const kyonen = ageAtDeath(p.birthDate, p.deathDate, p.birthYearUnknown);
+  const death = p.deathDate ? `${formatDate(p.deathDate)}${kyonen !== null ? `（享年${kyonen}）` : ""}` : undefined;
   const until = daysToBirthday(p.birthDate);
   const birth = p.birthDate
     ? `${p.birthYearUnknown ? formatMonthDay(p.birthDate) : formatDate(p.birthDate)}${a !== null ? `（${a}歳）` : ""}${
@@ -142,6 +145,7 @@ const InfoTab = ({ person: p }: { person: Person }) => {
         <KV
           items={[
             ["誕生日", birth],
+            ["命日", death],
             ["出会い", [p.metDate ? formatDate(p.metDate) : "", p.metHow].filter(Boolean).join(" ・ ") || undefined],
             ["電話", p.phone ? <a href={`tel:${p.phone}`}>{p.phone}</a> : undefined],
             ["メール", p.email ? <a href={`mailto:${p.email}`}>{p.email}</a> : undefined],

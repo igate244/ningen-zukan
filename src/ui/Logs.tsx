@@ -79,14 +79,14 @@ export const LogsPage = () => {
   );
 };
 
-export const LogEdit = ({ id, presetPersonId }: { id?: string; presetPersonId?: string }) => {
+export const LogEdit = ({ id, presetPersonId, presetDate, presetKind }: { id?: string; presetPersonId?: string; presetDate?: string; presetKind?: LogKind }) => {
   const original = id ? getData().logs.find((l) => l.id === id) : undefined;
   const [log, setLog] = useState<LogEntry>(() => {
     if (original) return original;
     const now = Date.now();
-    return { id: newId(), createdAt: now, updatedAt: now, date: today(), personIds: presetPersonId ? [presetPersonId] : [], kind: "meet", text: "" };
+    return { id: newId(), createdAt: now, updatedAt: now, date: presetDate || today(), personIds: presetPersonId ? [presetPersonId] : [], kind: presetKind ?? "meet", text: "" };
   });
-  const [picking, setPicking] = useState(!original && !presetPersonId);
+  const [picking, setPicking] = useState(!original && !presetPersonId && presetKind !== "event");
   const [error, setError] = useState<string | null>(null);
   const data = useData();
 
@@ -95,8 +95,12 @@ export const LogEdit = ({ id, presetPersonId }: { id?: string; presetPersonId?: 
   const people = log.personIds.map((pid) => data.persons.find((p) => p.id === pid)).filter((p) => p && !p.deleted);
 
   const onSave = async (): Promise<void> => {
-    if (log.personIds.length === 0) {
+    if (log.personIds.length === 0 && log.kind !== "event") {
       setError("誰との記録か選んでください");
+      return;
+    }
+    if (log.kind === "event" && !log.text.trim()) {
+      setError("イベントの名前を入れてください");
       return;
     }
     await saveLog({ ...log, text: log.text.trim() });
@@ -118,7 +122,7 @@ export const LogEdit = ({ id, presetPersonId }: { id?: string; presetPersonId?: 
       />
       <main className="main">
         <div className="form">
-          <Field label="だれと">
+          <Field label={log.kind === "event" ? "だれと（任意）" : "だれと"}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {people.map((p) => p && (
                 <span className="person-pill" key={p.id} style={{ fontSize: 13, padding: "3px 10px 3px 3px" }}>
@@ -146,8 +150,16 @@ export const LogEdit = ({ id, presetPersonId }: { id?: string; presetPersonId?: 
             <input className="input" type="date" value={log.date} onChange={(e) => setLog({ ...log, date: e.target.value || today() })} />
           </Field>
 
-          <Field label="ひとこと">
-            <textarea className="textarea" rows={5} value={log.text} placeholder="何を話した？どうだった？気づいたこと"
+          {log.kind === "event" && (
+            <label className="check-inline">
+              <input type="checkbox" className="switch" checked={!!log.yearly} onChange={(e) => setLog({ ...log, yearly: e.target.checked })} />
+              毎年くり返す（記念日など）
+            </label>
+          )}
+
+          <Field label={log.kind === "event" ? "イベント名・メモ" : "ひとこと"} hint={log.kind === "event" ? "1行目がカレンダーに出る名前になります" : undefined}>
+            <textarea className="textarea" rows={5} value={log.text}
+              placeholder={log.kind === "event" ? "結婚記念日 / 同窓会 / 〇〇さんの送別会" : "何を話した？どうだった？気づいたこと"}
               onChange={(e) => setLog({ ...log, text: e.target.value })} />
           </Field>
 

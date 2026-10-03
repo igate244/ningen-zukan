@@ -48,8 +48,8 @@ export const PeopleList = () => {
       switch (sort) {
         case "birthday": {
           // 誕生日が未登録の人は最後に回す
-          const da = daysToBirthday(a.birthDate) ?? 9999;
-          const db = daysToBirthday(b.birthDate) ?? 9999;
+          const da = a.deathDate ? 10000 : daysToBirthday(a.birthDate) ?? 9999;
+          const db = b.deathDate ? 10000 : daysToBirthday(b.birthDate) ?? 9999;
           return da - db || byKana(a, b);
         }
         case "recent":
@@ -71,12 +71,13 @@ export const PeopleList = () => {
     () =>
       persons
         .map((p) => ({ p, d: daysToBirthday(p.birthDate) }))
-        .filter((x): x is { p: Person; d: number } => x.d !== null && x.d <= 1)
+        .filter((x): x is { p: Person; d: number } => x.d !== null && x.d <= 1 && !x.p.deathDate)
         .sort((a, b) => a.d - b.d),
     [persons],
   );
 
   const birthdayLabel = (p: Person): string => {
+    if (p.deathDate) return "故人";
     const d = daysToBirthday(p.birthDate);
     if (d === null) return "";
     if (d === 0) return "今日が誕生日";

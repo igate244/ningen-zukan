@@ -352,3 +352,35 @@ a { color: var(--accent); }
 .save-bar .btn { max-width: 608px; width: 100%; padding: 12px; font-size: 16px; }
 .radar { padding: 12px 10px; }
 .radar-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; padding: 4px 8px 0; }
+
+/* ---------------------------------------------------------------- カレンダー */
+:root { --c-birthday: #d0789a; --c-death: #8d8b85; --c-event: #4f7fb0; --c-log: var(--accent); }
+.cal-head { display: flex; align-items: center; gap: 4px; margin: 12px 0 8px; }
+.cal-title { font-size: 18px; font-weight: 800; min-width: 120px; text-align: center; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); padding: 6px; gap: 2px; }
+.cal-week { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-3); padding: 4px 0; }
+.cal-week.sun, .cal-cell.sun .cal-num { color: #c75b5b; }
+.cal-week.sat, .cal-cell.sat .cal-num { color: #4f7fb0; }
+.cal-cell { aspect-ratio: 1 / 1; border: none; background: transparent; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 5px 0 0; gap: 3px; min-height: 40px; }
+.cal-cell.empty { pointer-events: none; }
+.cal-cell:active { background: var(--surface-2); }
+.cal-num { font-size: 14px; font-weight: 600; width: 26px; height: 26px; line-height: 26px; border-radius: 50%; text-align: center; }
+.cal-cell.today .cal-num { background: var(--accent); color: #fff !important; font-weight: 800; }
+.cal-cell.sel { background: var(--accent-soft); }
+.cal-dots { display: flex; gap: 3px; height: 6px; }
+.cal-dots i, .cal-legend i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.dot-birthday { background: var(--c-birthday); }
+.dot-death { background: var(--c-death); }
+.dot-event { background: var(--c-event); }
+.dot-log { background: var(--c-log); }
+.cal-legend { display: flex; gap: 12px; font-size: 11px; color: var(--text-2); margin: 8px 4px 0; }
+.cal-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.type-badge { flex: none; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 999px; color: #fff; min-width: 52px; text-align: center; }
+.t-birthday { background: var(--c-birthday); }
+.t-death { background: var(--c-death); }
+.t-event { background: var(--c-event); }
+.t-log { background: var(--c-log); }
+@media (prefers-color-scheme: dark) { .t-log { color: #10201f; } }
+.fab-row { position: fixed; z-index: 11; right: max(16px, calc(50vw - 320px + 16px)); bottom: calc(env(safe-area-inset-bottom) + 72px); display: flex; gap: 8px; align-items: center; }
+.fab-row .fab { position: static; }
+.fab.fab-sub { background: var(--surface); color: var(--c-event); border: 1px solid var(--line); height: 44px; padding: 0 14px; }
