@@ -180,6 +180,14 @@ const FamilySection = ({ person: p }: { person: Person }) => {
   const sibs = siblingsOf(fx, p.id);
   const has = parents.length + spouses.length + exes.length + kids.length + sibs.length > 0;
 
+  // 配偶者がひとりいて、片親しか登録されていない子がいれば、まとめて親にできるようにする
+  const partner = spouses.length === 1 ? spouses[0] : null;
+  const orphanKids = partner ? kids.filter((k) => parentsOf(fx, k).length === 1) : [];
+  const linkPartner = async (): Promise<void> => {
+    if (!partner) return;
+    for (const k of orphanKids) await saveRelation({ a: partner, b: k, type: "parent" });
+  };
+
   // 「◯◯と◯◯の長男」
   const origin =
     parents.length > 0
@@ -234,6 +242,16 @@ const FamilySection = ({ person: p }: { person: Person }) => {
             const other = parentsOf(fx, id).filter((x) => x !== p.id);
             return <Row key={id} id={id} label={childLabel(fx, p.id, id)} extra={other.length ? `${other.map(name).join("・")}との子` : undefined} />;
           })}
+        </div>
+      )}
+      {partner && orphanKids.length > 0 && (
+        <div className="card banner" style={{ marginTop: 8 }}>
+          <span className="grow small">
+            {orphanKids.map(name).join("、")} の親に {name(partner)} が入っていません
+          </span>
+          <button type="button" className="text-btn small" onClick={() => void linkPartner()}>
+            {name(partner)}も親にする
+          </button>
         </div>
       )}
       <div className="chips" style={{ flexWrap: "wrap" }}>
