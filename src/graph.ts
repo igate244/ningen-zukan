@@ -4,7 +4,7 @@
 //   相関図（radial）: 真ん中の人から何ステップ先までを、同心円状に並べる
 //   家系図（family）: 親子・夫婦・兄弟のつながりだけをたどり、世代ごとに横一列に並べる
 
-import { compareAge, familyIndex, kinLabel } from "./family";
+import { childrenOf, compareAge, exSpousesOf, familyIndex, kinLabel, parentsOf, siblingsOf, sortByAge, spousesOf } from "./family";
 import { type AppData, type Person, type Relation, type RelType, relationLabelFrom } from "./model";
 
 export interface GNode {
@@ -65,6 +65,37 @@ const bounds = (nodes: GNode[]): { width: number; height: number } => {
 
 // ===================================================================== 相関図
 
+/**
+ * 希望の角度を保ちつつ、隣同士が gap 以上離れるように少しずつ押し広げる（円周上）。
+ * 並び順（希望角度の順）は変えない。
+ */
+const relaxAngles = (want: Map<string, number>, gap: number): Map<string, number> => {
+  const TAU = Math.PI * 2;
+  const norm = (a: number): number => ((a % TAU) + TAU) % TAU;
+  const items = [...want.entries()].map(([id, a]) => ({ id, a: norm(a), w: norm(a) })).sort((x, y) => x.a - y.a);
+  const n = items.length;
+  if (n <= 1) return new Map(items.map((x) => [x.id, x.a]));
+  for (let iter = 0; iter < 200; iter++) {
+    let moved = false;
+    for (let i = 0; i < n; i++) {
+      const cur = items[i];
+      const next = items[(i + 1) % n];
+      let d = next.a - cur.a;
+      if (i === n - 1) d += TAU;
+      if (d < gap - 1e-6) {
+        const push = (gap - d) / 2;
+        cur.a -= push;
+        next.a += push;
+        moved = true;
+      }
+    }
+    // 希望の位置へ少しだけ引き戻す（全体がずれていかないように）
+    for (const it of items) it.a += (it.w - it.a) * 0.02;
+    if (!moved) break;
+  }
+  return new Map(items.map((x) => [x.id, x.a]));
+};
+
 export const buildRadial = (data: AppData, centerId: string, maxDepth: 1 | 2): Graph => {
   const { persons, rels, adj } = aliveIndex(data);
   const fx = familyIndex(data);
@@ -105,33 +136,85 @@ export const buildRadial = (data: AppData, centerId: string, maxDepth: 1 | 2): G
     children.set(parent, [...(children.get(parent) ?? []), id]);
   }
 
-  // 1 周目の各人に、子の数に応じた角度の幅を割り当てる
-  const weight = (id: string): number => Math.max(1, (children.get(id)?.length ?? 0) * 0.8);
-  const total = ring1.reduce((s, id) => s + weight(id), 0) || 1;
+  // ---- 1 周目の置き場所：家族は上下（年上は上・子は下・配偶者は横）、仕事は左、友人などは右
   const n1 = ring1.length;
-  // 隣同士の名前が重ならないよう、人数に応じて円を大きくする
   const R1 = Math.max(130, (n1 * 92) / (2 * Math.PI));
+  const gap1 = Math.min((2 * Math.PI) / Math.max(1, n1), 92 / R1);
+  const deg = (d: number): number => (d * Math.PI) / 180;
+
+  const parents = parentsOf(fx, centerId);
+  const kidsOfCenter = childrenOf(fx, centerId);
+  const spouses = spousesOf(fx, centerId);
+  const exes = exSpousesOf(fx, centerId);
+  const sibs = siblingsOf(fx, centerId).map((x) => x.id);
+  const centerP = persons.get(centerId);
+
+  type Zone = "top" | "bottom" | "right" | "left";
+  const zoneOf = (id: string): Zone => {
+    if (parents.includes(id) || sibs.includes(id)) return "top";
+    if (kidsOfCenter.includes(id)) return "bottom";
+    if (spouses.includes(id)) return "right";
+    if (exes.includes(id)) return "left";
+    const p = persons.get(id)!;
+    const kind = edgeKind(via.get(id)!.type);
+    if (p.category === "family" || p.category === "relative" || kind === "family") {
+      // 親族は年上なら上、年下なら下（わからなければ上）
+      return compareAge(centerP, p) < 0 ? "bottom" : "top";
+    }
+    return kind === "work" ? "left" : "right";
+  };
+  // 各ゾーンの中心角と、ゾーン内の並べ方
+  const ZONE_CENTER: Record<Zone, number> = { top: deg(-90), bottom: deg(90), right: deg(0), left: deg(180) };
+  const zones: Record<Zone, string[]> = { top: [], bottom: [], right: [], left: [] };
+  for (const id of ring1) zones[zoneOf(id)].push(id);
+
+  const want = new Map<string, number>();
+  const byAgeDesc = (a: string, b: string): number => compareAge(persons.get(a), persons.get(b));
+  // 上：年上ほど真上に近く、そこから左右へ交互に
+  zones.top.sort(byAgeDesc).forEach((id, i) => {
+    const step = Math.ceil(i / 2) * (i % 2 ? -1 : 1);
+    want.set(id, ZONE_CENTER.top + step * gap1);
+  });
+  // 下：子どもは左から年上順
+  zones.bottom.sort(byAgeDesc).forEach((id, i, arr) => {
+    want.set(id, ZONE_CENTER.bottom + ((arr.length - 1) / 2 - i) * gap1);
+  });
+  // 右：配偶者を真横に、ほかはその上下へ交互に
+  zones.right.sort((a, b) => Number(spouses.includes(b)) - Number(spouses.includes(a))).forEach((id, i) => {
+    const step = Math.ceil(i / 2) * (i % 2 ? 1 : -1);
+    want.set(id, ZONE_CENTER.right + step * gap1);
+  });
+  // 左：元配偶者を真横に、仕事の人はその上下へ
+  zones.left.sort((a, b) => Number(exes.includes(b)) - Number(exes.includes(a))).forEach((id, i) => {
+    const step = Math.ceil(i / 2) * (i % 2 ? 1 : -1);
+    want.set(id, ZONE_CENTER.left + step * gap1);
+  });
+  const angle1 = relaxAngles(want, gap1);
+
+  // ---- 2 周目：経由した 1 周目の人の外側に並べる
   const n2 = [...children.values()].reduce((s, l) => s + l.length, 0);
   const R2 = Math.max(R1 + 130, (n2 * 84) / (2 * Math.PI));
+  const gap2 = Math.min((2 * Math.PI) / Math.max(1, n2), 84 / R2);
+  const want2 = new Map<string, number>();
+  for (const id of ring1) {
+    const kids = sortByAge(fx, children.get(id) ?? []);
+    kids.forEach((kid, i) => want2.set(kid, angle1.get(id)! + ((kids.length - 1) / 2 - i) * gap2 * (Math.sin(angle1.get(id)!) > 0 ? 1 : -1)));
+  }
+  const angle2 = relaxAngles(want2, gap2);
 
   const nodes: GNode[] = [{ id: centerId, person: center, x: 0, y: 0, depth: 0 }];
-  let angle = -Math.PI / 2 - (weight(ring1[0] ?? "") / total) * Math.PI;
   for (const id of ring1) {
-    const span = (weight(id) / total) * Math.PI * 2;
-    const mid = angle + span / 2;
-    const r = via.get(id)!;
-    nodes.push({ id, person: persons.get(id)!, x: Math.cos(mid) * R1, y: Math.sin(mid) * R1, sub: label(r, centerId, id), depth: 1 });
-    const kids = children.get(id) ?? [];
-    kids.forEach((kid, i) => {
-      const a = angle + (span * (i + 0.5)) / kids.length;
-      const kr = via.get(kid)!;
-      const parentName = persons.get(id)!.isSelf ? "自分" : persons.get(id)!.name;
-      nodes.push({
-        id: kid, person: persons.get(kid)!, x: Math.cos(a) * R2, y: Math.sin(a) * R2,
-        sub: `${parentName}の${label(kr, id, kid)}`, depth: 2,
-      });
+    const a = angle1.get(id)!;
+    nodes.push({ id, person: persons.get(id)!, x: Math.cos(a) * R1, y: Math.sin(a) * R1, sub: label(via.get(id)!, centerId, id), depth: 1 });
+  }
+  for (const [kid, a] of angle2) {
+    const kr = via.get(kid)!;
+    const parentId = other(kr, kid);
+    const parentName = persons.get(parentId)!.isSelf ? "自分" : persons.get(parentId)!.name;
+    nodes.push({
+      id: kid, person: persons.get(kid)!, x: Math.cos(a) * R2, y: Math.sin(a) * R2,
+      sub: `${parentName}の${label(kr, parentId, kid)}`, depth: 2,
     });
-    angle += span;
   }
 
   const pos = new Map(nodes.map((n) => [n.id, n]));
