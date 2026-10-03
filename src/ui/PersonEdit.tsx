@@ -352,7 +352,7 @@ export const PersonEdit = ({ id }: { id?: string }) => {
         </Group>
 
         {/* ---- グループ・タグ（タップで付け外し） */}
-        <Group title="グループ">
+        <Group title="所属グループ" footer="会社・学校・部活など、どこの集まりにいるか">
           <div className="token-box">
             {groups.map((g) => {
               const on = p.groups.includes(g.id);
@@ -367,7 +367,7 @@ export const PersonEdit = ({ id }: { id?: string }) => {
           </div>
         </Group>
 
-        <Group title="タグ">
+        <Group title="特徴タグ" footer="キーマン・酒好きなど、どんな人か">
           <div className="token-box">
             {p.tags.map((t) => (
               <span key={t} className="chip on">
@@ -375,7 +375,7 @@ export const PersonEdit = ({ id }: { id?: string }) => {
                 <button type="button" className="chip-x" aria-label={`${t} を外す`} onClick={() => set("tags", p.tags.filter((x) => x !== t))}>×</button>
               </span>
             ))}
-            <input className="token-input" value={tagDraft} placeholder="タグを入力して改行" enterKeyHint="done"
+            <input className="token-input" value={tagDraft} placeholder="特徴を入力して改行" enterKeyHint="done"
               onChange={(e) => setTagDraft(e.target.value)}
               onKeyDown={(e) => {
                 if ((e.key === "Enter" || e.key === ",") && !e.nativeEvent.isComposing) {
