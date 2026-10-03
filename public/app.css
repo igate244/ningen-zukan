@@ -273,3 +273,7 @@ a { color: var(--accent); }
 .graph-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .graph-legend i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; }
 .graph-legend i.dash { background: repeating-linear-gradient(90deg, var(--edge-other) 0 4px, transparent 4px 7px); }
+
+.row-side.soon { color: var(--accent); font-weight: 700; }
+.birthday-banner { background: var(--accent-soft); border-color: transparent; }
+.birthday-line { display: block; border: none; background: transparent; padding: 2px 0; text-align: left; font-size: 14px; }

@@ -1,15 +1,16 @@
 // src/ui/PeopleList.tsx — 人物一覧（検索・絞り込み・並べ替え）
 
 import { useMemo, useState } from "react";
-import { daysSince, sinceLabel } from "../dates";
+import { age, daysSince, daysToBirthday, sinceLabel } from "../dates";
 import { CATEGORIES, CATEGORY_LABEL, type Category, type Person } from "../model";
 import { navigate } from "../router";
 import { alive, lastMetMap, useData } from "../store";
 import { Avatar, Icon } from "./common";
 
-type Sort = "kana" | "recent" | "stale" | "added";
+type Sort = "birthday" | "kana" | "recent" | "stale" | "added";
 
 const SORT_LABEL: Record<Sort, string> = {
+  birthday: "誕生日が近い順",
   kana: "名前順",
   recent: "最近会った順",
   stale: "ご無沙汰順",
@@ -17,7 +18,7 @@ const SORT_LABEL: Record<Sort, string> = {
 };
 
 // 一覧の状態は画面を離れても覚えておく（詳細から戻ったときに検索がリセットされないように）
-const memo = { q: "", cat: "all" as Category | "all", sort: "kana" as Sort, tag: "" };
+const memo = { q: "", cat: "all" as Category | "all", sort: "birthday" as Sort, tag: "" };
 
 export const PeopleList = () => {
   const data = useData();
@@ -43,6 +44,12 @@ export const PeopleList = () => {
       const la = lastMet.get(a.id) ?? "";
       const lb = lastMet.get(b.id) ?? "";
       switch (sort) {
+        case "birthday": {
+          // 誕生日が未登録の人は最後に回す
+          const da = daysToBirthday(a.birthDate) ?? 9999;
+          const db = daysToBirthday(b.birthDate) ?? 9999;
+          return da - db || byKana(a, b);
+        }
         case "recent":
           return la === lb ? byKana(a, b) : lb.localeCompare(la);
         case "stale":
@@ -57,8 +64,41 @@ export const PeopleList = () => {
     });
   }, [persons, q, cat, tag, sort, lastMet]);
 
+  // 今日・明日が誕生日の人
+  const soon = useMemo(
+    () =>
+      persons
+        .map((p) => ({ p, d: daysToBirthday(p.birthDate) }))
+        .filter((x): x is { p: Person; d: number } => x.d !== null && x.d <= 1)
+        .sort((a, b) => a.d - b.d),
+    [persons],
+  );
+
+  const birthdayLabel = (p: Person): string => {
+    const d = daysToBirthday(p.birthDate);
+    if (d === null) return "";
+    if (d === 0) return "今日が誕生日";
+    if (d === 1) return "明日が誕生日";
+    return `誕生日まで${d}日`;
+  };
+
   return (
     <>
+      {soon.length > 0 && (
+        <div className="card banner birthday-banner">
+          <div className="grow">
+            {soon.map(({ p, d }) => {
+              const a = age(p.birthDate, p.birthYearUnknown);
+              return (
+                <button type="button" key={p.id} className="birthday-line" onClick={() => navigate(`/p/${p.id}`)}>
+                  <strong>{d === 0 ? "今日" : "明日"}</strong>は <strong>{p.name}</strong> の誕生日
+                  {a !== null && <span className="muted">（{d === 0 ? a : a + 1}歳）</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <input className="search" type="search" placeholder="名前・所属・タグで検索" value={q} onChange={(e) => setQ(e.target.value)} />
 
       <div className="chips">
@@ -115,7 +155,11 @@ export const PeopleList = () => {
                   </div>
                   <div className="row-sub">{[p.org, p.dept, p.title].filter(Boolean).join(" ・ ") || CATEGORY_LABEL[p.category]}</div>
                 </div>
-                <div className={`row-side ${days !== null && days > 90 ? "stale" : ""}`}>{met ? sinceLabel(met) : ""}</div>
+                {sort === "birthday" ? (
+                  <div className={`row-side ${(daysToBirthday(p.birthDate) ?? 99) <= 7 ? "soon" : ""}`}>{birthdayLabel(p)}</div>
+                ) : (
+                  <div className={`row-side ${days !== null && days > 90 ? "stale" : ""}`}>{met ? sinceLabel(met) : ""}</div>
+                )}
               </button>
             );
           })}
