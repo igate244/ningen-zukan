@@ -75,7 +75,8 @@ export const MapPage = () => {
       )}
       {mode === "family" && (
         <div className="map-sub">
-          <span className="small muted">親子・夫婦・兄弟姉妹のつながりから自動で並べます</span>
+          <GraphLegend family />
+          <span className="small muted">親子・夫婦・兄弟から自動で並べます</span>
         </div>
       )}
 

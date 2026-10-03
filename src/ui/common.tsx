@@ -2,7 +2,7 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 import { useImageUrl } from "../image";
-import { type Person, selfLabel } from "../model";
+import { type Person, iconCharOf, selfLabel } from "../model";
 import { goBack } from "../router";
 import { alive, useData } from "../store";
 
@@ -44,9 +44,9 @@ const colorFor = (id: string): string => {
   return COLORS[h % COLORS.length];
 };
 
-export const Avatar = ({ person, size = 40 }: { person?: Pick<Person, "id" | "name" | "photo">; size?: number }) => {
+export const Avatar = ({ person, size = 40 }: { person?: Pick<Person, "id" | "name" | "photo" | "iconChar">; size?: number }) => {
   const url = useImageUrl(person?.photo);
-  const initial = person?.name?.trim().charAt(0) ?? "?";
+  const initial = iconCharOf(person);
   return (
     <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.42, background: url ? "transparent" : colorFor(person?.id ?? "x") }}>
       {url ? <img src={url} alt="" /> : initial}

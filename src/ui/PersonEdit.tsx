@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { shrinkImage } from "../image";
-import { CATEGORIES, CATEGORY_LABEL, type Career, type Category, type Person, type WorkManual, emptyPerson, newId } from "../model";
+import { CATEGORIES, CATEGORY_LABEL, type Career, type Category, GENDERS, GENDER_LABEL, type Person, type WorkManual, emptyPerson, newId } from "../model";
 import { goBack, navigate } from "../router";
 import { addImage, deletePerson, getData, savePerson } from "../store";
 import { Avatar, Field, Icon, TopBar } from "./common";
@@ -63,6 +63,8 @@ export const PersonEdit = ({ id }: { id?: string }) => {
       ...p,
       name: p.name.trim(),
       kana: clean(p.kana),
+      // 日本語入力の途中で切らないよう、入力中はそのまま持ち、保存時に 1 文字にする
+      iconChar: clean(p.iconChar) ? [...clean(p.iconChar)!][0] : undefined,
       tags,
       work,
       careers: p.careers.filter((c) => c.org || c.dept || c.title || c.note),
@@ -112,6 +114,14 @@ export const PersonEdit = ({ id }: { id?: string }) => {
                 写真を外す
               </button>
             )}
+            {!p.photo && (
+              <label className="check-inline" style={{ cursor: "default" }}>
+                アイコンの文字
+                <input className="input" style={{ width: 56, textAlign: "center", padding: "6px 4px" }} value={p.iconChar ?? ""}
+                  placeholder={[...(p.name.trim() || "?")][0]}
+                  onChange={(e) => set("iconChar", e.target.value || undefined)} />
+              </label>
+            )}
           </div>
 
           <div className="card fieldset">
@@ -126,6 +136,15 @@ export const PersonEdit = ({ id }: { id?: string }) => {
                 <Text value={p.nickname} onChange={(v) => set("nickname", v)} />
               </Field>
             </div>
+            <Field label="性別">
+              <div className="chips" style={{ paddingTop: 0, flexWrap: "wrap" }}>
+                {GENDERS.map((g) => (
+                  <button type="button" key={g} className={`chip ${p.gender === g ? "on" : ""}`} onClick={() => set("gender", p.gender === g ? undefined : g)}>
+                    {GENDER_LABEL[g]}
+                  </button>
+                ))}
+              </div>
+            </Field>
             {!p.isSelf && (
               <Field label="区分">
                 <div className="chips" style={{ paddingTop: 0, flexWrap: "wrap" }}>
@@ -235,6 +254,10 @@ export const PersonEdit = ({ id }: { id?: string }) => {
                 <input type="checkbox" checked={!!p.birthYearUnknown} onChange={(e) => set("birthYearUnknown", e.target.checked)} />
                 生まれ年はわからない
               </label>
+              <Field label="兄弟姉妹の中で何番目に生まれたか" hint="誕生日（年まで）が入っていれば不要。わからないときの並び順に使います">
+                <input className="input" type="number" min={1} max={20} inputMode="numeric" value={p.birthOrder ?? ""}
+                  onChange={(e) => set("birthOrder", e.target.value ? Number(e.target.value) : undefined)} placeholder="例: 1（長子）" />
+              </Field>
               <div className="two">
                 <Field label="出会った日">
                   <Text type="date" value={p.metDate} onChange={(v) => set("metDate", v)} />

@@ -4,6 +4,7 @@
 //   相関図（radial）: 真ん中の人から何ステップ先までを、同心円状に並べる
 //   家系図（family）: 親子・夫婦・兄弟のつながりだけをたどり、世代ごとに横一列に並べる
 
+import { compareAge, familyIndex, kinLabel } from "./family";
 import { type AppData, type Person, type Relation, type RelType, relationLabelFrom } from "./model";
 
 export interface GNode {
@@ -21,7 +22,7 @@ export interface GEdge {
   rel: Relation;
   /** 描画用の点の並び（直線なら 2 点、家系図のカギ線なら複数） */
   points: Array<[number, number]>;
-  kind: "family" | "work" | "friend" | "other" | "spouse";
+  kind: "family" | "work" | "friend" | "other" | "spouse" | "exspouse";
   /** 中心からたどった線以外（相関図では薄く描く） */
   faint?: boolean;
 }
@@ -35,13 +36,13 @@ export interface Graph {
 
 export const NODE_R = 26;
 
-const FAMILY: RelType[] = ["parent", "spouse", "sibling"];
+const FAMILY: RelType[] = ["parent", "spouse", "exspouse", "sibling"];
 
 export const edgeKind = (t: RelType): GEdge["kind"] =>
-  t === "spouse" ? "spouse" : FAMILY.includes(t) ? "family" : t === "boss" || t === "colleague" ? "work" : t === "friend" ? "friend" : "other";
+  t === "spouse" ? "spouse" : t === "exspouse" ? "exspouse" : FAMILY.includes(t) ? "family" : t === "boss" || t === "colleague" ? "work" : t === "friend" ? "friend" : "other";
 
 /** 種類ごとの並び順（同じ種類の人が円周上でまとまるように） */
-const KIND_ORDER: Record<GEdge["kind"], number> = { spouse: 0, family: 1, work: 2, friend: 3, other: 4 };
+const KIND_ORDER: Record<GEdge["kind"], number> = { spouse: 0, exspouse: 1, family: 1, work: 2, friend: 3, other: 4 };
 
 const aliveIndex = (data: AppData) => {
   const persons = new Map(data.persons.filter((p) => !p.deleted).map((p) => [p.id, p]));
@@ -66,6 +67,8 @@ const bounds = (nodes: GNode[]): { width: number; height: number } => {
 
 export const buildRadial = (data: AppData, centerId: string, maxDepth: 1 | 2): Graph => {
   const { persons, rels, adj } = aliveIndex(data);
+  const fx = familyIndex(data);
+  const label = (r: Relation, viewer: string, o: string): string => kinLabel(fx, viewer, o) ?? relationLabelFrom(r, viewer);
   const center = persons.get(centerId);
   if (!center) return { nodes: [], edges: [], width: 0, height: 0 };
 
@@ -117,7 +120,7 @@ export const buildRadial = (data: AppData, centerId: string, maxDepth: 1 | 2): G
     const span = (weight(id) / total) * Math.PI * 2;
     const mid = angle + span / 2;
     const r = via.get(id)!;
-    nodes.push({ id, person: persons.get(id)!, x: Math.cos(mid) * R1, y: Math.sin(mid) * R1, sub: relationLabelFrom(r, centerId), depth: 1 });
+    nodes.push({ id, person: persons.get(id)!, x: Math.cos(mid) * R1, y: Math.sin(mid) * R1, sub: label(r, centerId, id), depth: 1 });
     const kids = children.get(id) ?? [];
     kids.forEach((kid, i) => {
       const a = angle + (span * (i + 0.5)) / kids.length;
@@ -125,7 +128,7 @@ export const buildRadial = (data: AppData, centerId: string, maxDepth: 1 | 2): G
       const parentName = persons.get(id)!.isSelf ? "自分" : persons.get(id)!.name;
       nodes.push({
         id: kid, person: persons.get(kid)!, x: Math.cos(a) * R2, y: Math.sin(a) * R2,
-        sub: `${parentName}の${relationLabelFrom(kr, id)}`, depth: 2,
+        sub: `${parentName}の${label(kr, id, kid)}`, depth: 2,
       });
     });
     angle += span;
@@ -150,6 +153,7 @@ export const buildRadial = (data: AppData, centerId: string, maxDepth: 1 | 2): G
 
 export const buildFamily = (data: AppData, centerId: string): Graph => {
   const { persons, rels } = aliveIndex(data);
+  const fx = familyIndex(data);
   const center = persons.get(centerId);
   if (!center) return { nodes: [], edges: [], width: 0, height: 0 };
 
@@ -179,12 +183,13 @@ export const buildFamily = (data: AppData, centerId: string): Graph => {
   }
 
   const parentsOf = (id: string): string[] => fam.filter((r) => r.type === "parent" && r.b === id && gen.has(r.a)).map((r) => r.a);
+  // 元夫婦も並びの上では夫婦と同じく隣に置く（子は 2 人の間から下ろす）
   const spouseOf = (id: string): string[] =>
-    fam.filter((r) => r.type === "spouse" && (r.a === id || r.b === id)).map((r) => other(r, id)).filter((o) => gen.has(o));
+    fam.filter((r) => (r.type === "spouse" || r.type === "exspouse") && (r.a === id || r.b === id)).map((r) => other(r, id)).filter((o) => gen.has(o));
 
   const gens = [...new Set(gen.values())].sort((a, b) => a - b);
   const X_GAP = 96;
-  const Y_GAP = 130;
+  const Y_GAP = 160;
   const x = new Map<string, number>();
 
   for (const g of gens) {
@@ -202,13 +207,23 @@ export const buildFamily = (data: AppData, centerId: string): Graph => {
       const sp = spouseOf(id).find((s) => gen.get(s) === g && key.get(s)! < 10_000);
       if (sp) key.set(id, key.get(sp)! + 0.1);
     }
-    row.sort((a, b) => key.get(a)! - key.get(b)!);
+    // 同じ親の子どうしは年の順（左が年上）
+    row.sort((a, b) => key.get(a)! - key.get(b)! || compareAge(persons.get(a), persons.get(b)));
     // 夫婦が離れていたら隣同士にする
+    // 相手が複数いる人は「元配偶者 ― 本人 ― 今の配偶者」の順に挟む
+    const exOf = (id: string): string[] =>
+      fam.filter((r) => r.type === "exspouse" && (r.a === id || r.b === id)).map((r) => other(r, id)).filter((o) => gen.get(o) === g);
     const arranged: string[] = [];
     for (const id of row) {
       if (arranged.includes(id)) continue;
-      arranged.push(id);
-      for (const sp of spouseOf(id)) if (gen.get(sp) === g && !arranged.includes(sp)) arranged.push(sp);
+      const partners = spouseOf(id).filter((sp) => gen.get(sp) === g && !arranged.includes(sp));
+      if (partners.length >= 2) {
+        const exes = partners.filter((sp) => exOf(id).includes(sp));
+        const cur = partners.filter((sp) => !exes.includes(sp));
+        arranged.push(...exes, id, ...cur);
+      } else {
+        arranged.push(id, ...partners);
+      }
     }
     // 親の真下を狙いつつ、重ならないように左から詰める
     const wanted = arranged.map((id) => (key.get(id)! < 10_000 ? key.get(id)! : Number.NaN));
@@ -238,18 +253,20 @@ export const buildFamily = (data: AppData, centerId: string): Graph => {
     x: x.get(id)! - midX,
     y: gen.get(id)! * Y_GAP - midY,
     depth: Math.abs(gen.get(id)!),
+    sub: id === centerId ? undefined : kinLabel(fx, centerId, id) ?? undefined,
   }));
   const pos = new Map(nodes.map((n) => [n.id, n]));
 
   const edges: GEdge[] = [];
   // 夫婦は横線
-  for (const r of fam.filter((r) => r.type === "spouse" && pos.has(r.a) && pos.has(r.b))) {
+  for (const r of fam.filter((r) => (r.type === "spouse" || r.type === "exspouse") && pos.has(r.a) && pos.has(r.b))) {
     const a = pos.get(r.a)!;
     const b = pos.get(r.b)!;
-    edges.push({ id: r.id, rel: r, kind: "spouse", points: [[a.x, a.y], [b.x, b.y]] });
+    edges.push({ id: r.id, rel: r, kind: r.type === "exspouse" ? "exspouse" : "spouse", points: [[a.x, a.y], [b.x, b.y]] });
   }
   // 親子はカギ線。両親がそろっていれば両親の中間から下ろす
   const done = new Set<string>();
+  const barSlots = new Map<number, string[]>();
   for (const r of fam.filter((r) => r.type === "parent" && pos.has(r.a) && pos.has(r.b))) {
     const child = pos.get(r.b)!;
     const ps = parentsOf(r.b).map((p) => pos.get(p)!).filter(Boolean);
@@ -259,7 +276,13 @@ export const buildFamily = (data: AppData, centerId: string): Graph => {
     done.add(key);
     const px = couple ? (ps[0].x + ps[1].x) / 2 : pos.get(r.a)!.x;
     const py = couple ? ps[0].y : pos.get(r.a)!.y + NODE_R;
-    const midYLine = (py + child.y) / 2 + 6;
+    // 親の組ごとに横線の高さを少しずらして、別の夫婦の子と線が混ざらないようにする
+    const originKey = `${Math.round(px)}:${Math.round(py)}`;
+    const rowKey = Math.round(child.y);
+    if (!barSlots.has(rowKey)) barSlots.set(rowKey, []);
+    const slots = barSlots.get(rowKey)!;
+    if (!slots.includes(originKey)) slots.push(originKey);
+    const midYLine = child.y - NODE_R - 22 - slots.indexOf(originKey) * 12;
     edges.push({ id: key, rel: r, kind: "family", points: [[px, py], [px, midYLine], [child.x, midYLine], [child.x, child.y - NODE_R]] });
   }
   // 兄弟（親が登録されていない場合だけ線を引く）

@@ -61,6 +61,10 @@ export interface WorkManual {
   strengths?: string;
 }
 
+export const GENDERS = ["male", "female", "other"] as const;
+export type Gender = (typeof GENDERS)[number];
+export const GENDER_LABEL: Record<Gender, string> = { male: "男性", female: "女性", other: "その他" };
+
 export interface Person extends Base {
   name: string;
   kana?: string;
@@ -69,6 +73,8 @@ export interface Person extends Base {
   tags: string[];
   /** 画像 ID（images テーブル） */
   photo?: string;
+  /** 写真が無いときのアイコンの文字（未設定なら名前の 1 文字目） */
+  iconChar?: string;
   pinned?: boolean;
   /** 自分自身を表す特別な人物 */
   isSelf?: boolean;
@@ -80,8 +86,11 @@ export interface Person extends Base {
   /** 過去の所属・異動の履歴 */
   careers: Career[];
 
+  gender?: Gender;
   birthDate?: string; // YYYY-MM-DD
   birthYearUnknown?: boolean;
+  /** 兄弟姉妹の中で何番目に生まれたか（誕生日がわからないときの並び用） */
+  birthOrder?: number;
   metDate?: string;
   metHow?: string;
 
@@ -105,7 +114,7 @@ export interface Person extends Base {
   favors: Favor[];
 }
 
-export const REL_TYPES = ["parent", "spouse", "sibling", "boss", "colleague", "friend", "introduced", "other"] as const;
+export const REL_TYPES = ["parent", "spouse", "exspouse", "sibling", "boss", "colleague", "friend", "introduced", "other"] as const;
 export type RelType = (typeof REL_TYPES)[number];
 
 /**
@@ -113,6 +122,7 @@ export type RelType = (typeof REL_TYPES)[number];
  *   parent:     a は b の親
  *   boss:       a は b の上司
  *   introduced: a が b を紹介してくれた / a の紹介で b と知り合った
+ *   exspouse:   元夫婦（離婚・死別など）
  */
 export interface Relation extends Base {
   a: string;
@@ -131,6 +141,8 @@ export const relationLabelFrom = (rel: Relation, viewerId: string): string => {
       return isA ? "子" : "親";
     case "spouse":
       return "配偶者";
+    case "exspouse":
+      return "元配偶者";
     case "sibling":
       return "兄弟姉妹";
     case "boss":
@@ -151,6 +163,7 @@ export const RELATION_CHOICES: Array<{ key: string; label: string; type: RelType
   { key: "parent", label: "親", type: "parent", otherIsA: true },
   { key: "child", label: "子", type: "parent", otherIsA: false },
   { key: "spouse", label: "配偶者", type: "spouse", otherIsA: true },
+  { key: "exspouse", label: "元配偶者（離婚など）", type: "exspouse", otherIsA: true },
   { key: "sibling", label: "兄弟姉妹", type: "sibling", otherIsA: true },
   { key: "boss", label: "上司", type: "boss", otherIsA: true },
   { key: "sub", label: "部下", type: "boss", otherIsA: false },
@@ -230,3 +243,7 @@ export const normalizePerson = (raw: Partial<Person> & { id: string }): Person =
 /** 表示名（自分は「名前（自分）」、名前が未設定なら「自分」） */
 export const selfLabel = (p: Pick<Person, "name" | "isSelf">): string =>
   p.isSelf ? (p.name && p.name !== "自分" ? `${p.name}（自分）` : "自分") : p.name;
+
+/** アイコンに出す 1 文字 */
+export const iconCharOf = (p?: Pick<Person, "name" | "iconChar">): string =>
+  (p?.iconChar && [...p.iconChar.trim()][0]) || [...(p?.name?.trim() ?? "?")][0] || "?";

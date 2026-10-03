@@ -3,10 +3,11 @@
 import { type PointerEvent, type WheelEvent, useEffect, useMemo, useRef, useState } from "react";
 import { type GEdge, type GNode, type Graph, NODE_R } from "../graph";
 import { useImageUrl } from "../image";
-import { selfLabel } from "../model";
+import { iconCharOf, selfLabel } from "../model";
 
 const EDGE_STYLE: Record<GEdge["kind"], { color: string; dash?: string; width: number }> = {
   spouse: { color: "var(--edge-family)", width: 3 },
+  exspouse: { color: "var(--edge-family)", width: 2, dash: "2 6" },
   family: { color: "var(--edge-family)", width: 2 },
   work: { color: "var(--edge-work)", width: 2 },
   friend: { color: "var(--edge-friend)", width: 2 },
@@ -32,14 +33,16 @@ const Node = ({ node, isCenter, onTap }: { node: GNode; isCenter: boolean; onTap
       <clipPath id={clip}>
         <circle r={r} />
       </clipPath>
-      <circle r={r + 3} fill="var(--surface)" stroke={isCenter ? "var(--accent)" : "var(--line)"} strokeWidth={isCenter ? 3 : 1.5} />
+      <circle r={r + 3} fill="var(--surface)"
+        stroke={isCenter ? "var(--accent)" : node.person.gender === "male" ? "var(--g-male)" : node.person.gender === "female" ? "var(--g-female)" : "var(--line)"}
+        strokeWidth={isCenter ? 3 : 2} />
       {url ? (
         <image href={url} x={-r} y={-r} width={r * 2} height={r * 2} clipPath={`url(#${clip})`} preserveAspectRatio="xMidYMid slice" />
       ) : (
         <>
           <circle r={r} fill={colorFor(node.id)} />
           <text textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize={r * 0.85} fontWeight={700}>
-            {node.person.name.trim().charAt(0)}
+            {iconCharOf(node.person)}
           </text>
         </>
       )}
@@ -161,6 +164,14 @@ export const GraphView = ({
               />
             );
           })}
+          {graph.edges.filter((e) => e.kind === "exspouse").map((e) => {
+            const [[x1, y1], [x2, y2]] = e.points;
+            return (
+              <text key={`${e.id}-x`} x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} textAnchor="middle" className="g-sub" fontSize={10}>
+                離婚
+              </text>
+            );
+          })}
           {graph.nodes.map((n) => (
             <Node key={n.id} node={n} isCenter={n.id === centerId} onTap={tap} />
           ))}
@@ -178,6 +189,7 @@ export const GraphView = ({
 export const GraphLegend = ({ family }: { family?: boolean }) => (
   <div className="graph-legend">
     <span><i style={{ background: "var(--edge-family)" }} />家族・親族</span>
+    <span><i className="dot" />元夫婦</span>
     {!family && (
       <>
         <span><i style={{ background: "var(--edge-work)" }} />仕事</span>

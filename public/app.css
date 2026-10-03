@@ -15,6 +15,8 @@
   --edge-work: #4f7fb0;
   --edge-friend: #5a9a5f;
   --edge-other: #9a978f;
+  --g-male: #7da3c9;
+  --g-female: #d79aae;
   --radius: 14px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
   --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
@@ -38,6 +40,8 @@
     --edge-work: #6f9fd0;
     --edge-friend: #7cbb80;
     --edge-other: #7d7a74;
+    --g-male: #6a8db3;
+    --g-female: #b97b90;
     --shadow: none;
     color-scheme: dark;
   }
@@ -277,3 +281,4 @@ a { color: var(--accent); }
 .row-side.soon { color: var(--accent); font-weight: 700; }
 .birthday-banner { background: var(--accent-soft); border-color: transparent; }
 .birthday-line { display: block; border: none; background: transparent; padding: 2px 0; text-align: left; font-size: 14px; }
+.graph-legend i.dot { background: repeating-linear-gradient(90deg, var(--edge-family) 0 2px, transparent 2px 6px); }

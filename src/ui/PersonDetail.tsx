@@ -3,14 +3,18 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { age, daysToBirthday, formatDate, formatMonthDay, sinceLabel, today } from "../dates";
 import {
-  CATEGORY_LABEL, type CheckItem, type Favor, LOG_KIND_LABEL, type Person, RELATION_CHOICES,
-  newId, relationLabelFrom,
+  CATEGORY_LABEL, type CheckItem, type Favor, GENDER_LABEL, LOG_KIND_LABEL, type Person, RELATION_CHOICES, type RelType,
+  newId, relationLabelFrom, selfLabel,
 } from "../model";
 import { navigate } from "../router";
 import { alive, deleteRelation, lastMetMap, saveRelation, savePerson, useData } from "../store";
 import { Avatar, Icon, PersonPicker, TopBar } from "./common";
 import { GraphView } from "./GraphView";
 import { buildRadial } from "../graph";
+import {
+  childLabel, childrenOf, exSpousesOf, familyIndex, kinLabel, parentLabel, parentsOf, siblingLabel, siblingsOf,
+  spouseLabel, spousesOf,
+} from "../family";
 
 type Tab = "info" | "manual" | "logs" | "links";
 const TAB_LABEL: Record<Tab, string> = { info: "概要", manual: "取説", logs: "記録", links: "つながり" };
@@ -72,6 +76,7 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
           {sub && <div className="hero-sub">{sub}</div>}
           <div className="badges">
             {!person.isSelf && <span className="badge accent">{CATEGORY_LABEL[person.category]}</span>}
+            {person.gender && <span className="badge">{GENDER_LABEL[person.gender]}</span>}
             {person.tags.map((t) => (
               <span className="badge" key={t}>#{t}</span>
             ))}
@@ -119,6 +124,7 @@ const InfoTab = ({ person: p }: { person: Person }) => {
 
   return (
     <>
+      <FamilySection person={p} />
       <div className="section">
         <KV
           items={[
@@ -150,6 +156,103 @@ const InfoTab = ({ person: p }: { person: Person }) => {
       )}
       {empty && <div className="empty">右上の編集ボタンから情報を足せます</div>}
     </>
+  );
+};
+
+// ------------------------------------------------------------------ 家族
+
+type AddKind = "parent" | "child" | "spouse" | "exspouse" | "sibling";
+const ADD_LABEL: Record<AddKind, string> = { parent: "親", spouse: "配偶者", child: "子", sibling: "兄弟姉妹", exspouse: "元配偶者" };
+
+const FamilySection = ({ person: p }: { person: Person }) => {
+  const data = useData();
+  const [adding, setAdding] = useState<AddKind | null>(null);
+  const fx = useMemo(() => familyIndex(data), [data]);
+  const name = (id: string): string => {
+    const x = fx.persons.get(id);
+    return x ? (x.isSelf ? selfLabel(x) : x.name) : "?";
+  };
+
+  const parents = parentsOf(fx, p.id).sort((a, b) => (fx.persons.get(a)?.gender === "male" ? -1 : 0) - (fx.persons.get(b)?.gender === "male" ? -1 : 0));
+  const spouses = spousesOf(fx, p.id);
+  const exes = exSpousesOf(fx, p.id);
+  const kids = childrenOf(fx, p.id);
+  const sibs = siblingsOf(fx, p.id);
+  const has = parents.length + spouses.length + exes.length + kids.length + sibs.length > 0;
+
+  // 「◯◯と◯◯の長男」
+  const origin =
+    parents.length > 0
+      ? `${parents.map(name).join("と")}の${childLabel(fx, parents[0], p.id)}`
+      : null;
+
+  const add = async (otherId: string): Promise<void> => {
+    if (!adding) return;
+    const type: RelType = adding === "child" ? "parent" : adding;
+    const [a, b] = adding === "parent" ? [otherId, p.id] : [p.id, otherId];
+    await saveRelation({ a, b, type });
+    // 子を足したとき、配偶者がひとりなら「その人も親？」と聞く（誰と誰の子かを残すため）
+    if (adding === "child") {
+      const partners = [...spousesOf(fx, p.id), ...exSpousesOf(fx, p.id)];
+      const already = parentsOf(fx, otherId);
+      const candidates = partners.filter((s) => !already.includes(s));
+      for (const s of candidates) {
+        if (window.confirm(`${name(s)} もこの子の親として登録しますか？`)) {
+          await saveRelation({ a: s, b: otherId, type: "parent" });
+          break;
+        }
+      }
+    }
+    setAdding(null);
+  };
+
+  const Row = ({ id, label, extra }: { id: string; label: string; extra?: string }) => {
+    const x = fx.persons.get(id);
+    return (
+      <button type="button" className="row" onClick={() => navigate(`/p/${id}`)}>
+        <Avatar person={x} size={32} />
+        <div className="row-main">
+          <div className="row-name">{name(id)}</div>
+          {extra && <div className="row-sub">{extra}</div>}
+        </div>
+        <span className="badge">{label}</span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="section">
+      <div className="section-title">家族</div>
+      {has && (
+        <div className="list card">
+          {origin && <div className="kv-item small" style={{ color: "var(--text-2)" }}>{origin}</div>}
+          {parents.map((id) => <Row key={id} id={id} label={parentLabel(fx.persons.get(id))} />)}
+          {spouses.map((id) => <Row key={id} id={id} label={spouseLabel(fx.persons.get(id))} />)}
+          {exes.map((id) => <Row key={id} id={id} label={spouseLabel(fx.persons.get(id), true)} />)}
+          {sibs.map((s) => <Row key={s.id} id={s.id} label={siblingLabel(fx, p.id, s)} />)}
+          {kids.map((id) => {
+            const other = parentsOf(fx, id).filter((x) => x !== p.id);
+            return <Row key={id} id={id} label={childLabel(fx, p.id, id)} extra={other.length ? `${other.map(name).join("・")}との子` : undefined} />;
+          })}
+        </div>
+      )}
+      <div className="chips" style={{ flexWrap: "wrap" }}>
+        {(Object.keys(ADD_LABEL) as AddKind[]).map((k) => (
+          <button type="button" key={k} className="chip" onClick={() => setAdding(k)}>＋ {ADD_LABEL[k]}</button>
+        ))}
+      </div>
+      {adding && (
+        <PersonPicker
+          title={`${p.isSelf ? "自分" : p.name}の${ADD_LABEL[adding]}`}
+          multiple={false}
+          includeSelf
+          selected={[]}
+          excludeIds={[p.id]}
+          onDone={(ids) => void (ids[0] ? add(ids[0]) : setAdding(null))}
+          onClose={() => setAdding(null)}
+        />
+      )}
+    </div>
   );
 };
 
@@ -310,6 +413,7 @@ const LinksTab = ({ person }: { person: Person }) => {
   );
   const byId = useMemo(() => new Map(data.persons.filter((p) => !p.deleted).map((p) => [p.id, p])), [data.persons]);
   const mini = useMemo(() => buildRadial(data, person.id, 1), [data, person.id]);
+  const fx = useMemo(() => familyIndex(data), [data]);
 
   const add = (otherId: string): void => {
     const c = RELATION_CHOICES.find((x) => x.key === choice) ?? RELATION_CHOICES[0];
@@ -359,7 +463,7 @@ const LinksTab = ({ person }: { person: Person }) => {
                   <Avatar person={other} size={36} />
                   <div className="row-main">
                     <div className="row-name">{other.isSelf ? "自分" : other.name}</div>
-                    <div className="row-sub">{relationLabelFrom(r, person.id)}</div>
+                    <div className="row-sub">{kinLabel(fx, person.id, other.id) ?? relationLabelFrom(r, person.id)}</div>
                   </div>
                 </button>
                 <button type="button" className="icon-btn" aria-label="つながりを外す" onClick={() => void deleteRelation(r.id)}>
