@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { isConfigured } from "../drive";
-import { type AppData, type Category, CATEGORIES, type Person, SELF_ID, emptyPerson } from "../model";
+import { type AppData, type Category, CATEGORIES, type Person, type Relation, SELF_ID, emptyPerson, newId } from "../model";
 import { navigate } from "../router";
 import { alive, getData, replaceAll, useData } from "../store";
 import { connect, disconnect, mergeData, reconnect, syncNow, useSyncState } from "../sync";
@@ -23,20 +23,32 @@ const stamp = (): string => new Date().toISOString().slice(0, 16).replace(/[-:T]
 
 /** MYME のバックアップ JSON から人物を取り込む（同じ名前の人がいれば飛ばす） */
 const importFromMyme = (json: Record<string, unknown>): { added: number; skipped: number } => {
-  const existing = new Set(alive(getData().persons).map((p) => p.name.replace(/\s/g, "")));
+  const d = getData();
+  const existing = new Set(alive(d.persons).map((p) => p.name.replace(/\s/g, "")));
   const out: Person[] = [];
+  const rels: Relation[] = [];
   let skipped = 0;
-  const push = (name: string, build: (p: Person) => Person): void => {
+  const push = (name: string, build: (p: Person) => Person): Person | null => {
     const key = name.replace(/\s/g, "");
     if (!key || existing.has(key)) {
       skipped++;
-      return;
+      return null;
     }
     existing.add(key);
-    out.push(build(emptyPerson(name.trim())));
+    const p = build(emptyPerson(name.trim()));
+    out.push(p);
+    return p;
   };
-  const toBirth = (b?: unknown): Pick<Person, "birthDate" | "birthYearUnknown"> => {
-    if (typeof b !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(b)) return {};
+  const toBirth = (raw?: unknown): Pick<Person, "birthDate" | "birthYearUnknown"> => {
+    let b = raw;
+    if (typeof b !== "string") return {};
+    // 「2001/04/09」のようなスラッシュ区切りもハイフンにそろえる
+    const ymd = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/.exec(b.trim());
+    if (ymd) b = `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;
+    // 「10/05」のような月日だけの形式は生まれ年不明として扱う
+    const md = /^(\d{1,2})[/-](\d{1,2})$/.exec(b.trim());
+    if (md) return { birthDate: `2000-${md[1].padStart(2, "0")}-${md[2].padStart(2, "0")}`, birthYearUnknown: true };
+    if (!/^\d{4}-\d{2}-\d{2}/.test(b)) return {};
     // MYME は生まれ年不明を 1000 年で保存している
     return b.startsWith("1000-") ? { birthDate: `2000${b.slice(4, 10)}`, birthYearUnknown: true } : { birthDate: b.slice(0, 10) };
   };
@@ -53,12 +65,23 @@ const importFromMyme = (json: Record<string, unknown>): { added: number; skipped
       tags: ["MYMEから"],
     }));
   }
+  // 育成記録の子どもたちは「自分の子」としてつなぐ
+  const now = Date.now();
   for (const f of (json.familyMembers as Array<Record<string, unknown>>) ?? []) {
     if (!f || typeof f.name !== "string") continue;
-    push(f.name, (p) => ({ ...p, category: "family", ...toBirth(f.birthDate), tags: ["MYMEから"] }));
+    const child = push(f.name, (p) => ({ ...p, category: "family", ...toBirth(f.birthDate), tags: ["MYMEから"] }));
+    if (child) rels.push({ id: newId(), createdAt: now, updatedAt: now, a: SELF_ID, b: child.id, type: "parent" });
   }
-  const d = getData();
-  void replaceAll({ ...d, persons: [...d.persons, ...out] }, true);
+
+  // 自分のページがまだ初期状態なら、MYME のプロフィールの名前と誕生日を入れる
+  let persons = [...d.persons, ...out];
+  const prof = json.profile as Record<string, unknown> | null;
+  const self = d.persons.find((p) => p.id === SELF_ID);
+  if (prof && self && self.name === "自分" && typeof prof.name === "string" && prof.name.trim()) {
+    const updated: Person = { ...self, name: prof.name.trim(), ...toBirth(prof.birthDate), updatedAt: now };
+    persons = persons.map((p) => (p.id === SELF_ID ? updated : p));
+  }
+  void replaceAll({ ...d, persons, relations: [...d.relations, ...rels] }, true);
   return { added: out.length, skipped };
 };
 
