@@ -5,6 +5,7 @@ import { navigate, useRoute } from "../router";
 import { reconnect, useSyncState } from "../sync";
 import { Icon, TopBar } from "./common";
 import { LogEdit, LogsPage } from "./Logs";
+import { MapPage } from "./MapPage";
 import { OrgPage } from "./OrgPage";
 import { PeopleList } from "./PeopleList";
 import { PersonDetail } from "./PersonDetail";
@@ -14,6 +15,7 @@ import { SettingsPage } from "./Settings";
 const TABS = [
   { path: "", label: "人物", icon: "people" },
   { path: "logs", label: "記録", icon: "log" },
+  { path: "map", label: "相関図", icon: "map" },
   { path: "org", label: "組織", icon: "org" },
   { path: "settings", label: "設定", icon: "settings" },
 ] as const;
@@ -62,10 +64,11 @@ export const App = () => {
 
   if (a === "new") page = <PersonEdit />;
   else if (a === "p" && b && c === "edit") page = <PersonEdit key={b} id={b} />;
-  else if (a === "p" && b) page = <PersonDetail key={b} id={b} />;
+  else if (a === "p" && b) page = <PersonDetail key={b} id={b} initialTab={query.get("tab") ?? undefined} />;
   else if (a === "log" && b === "new") page = <LogEdit presetPersonId={query.get("p") ?? undefined} />;
   else if (a === "log" && b) page = <LogEdit key={b} id={b} />;
   else if (a === "logs") page = <TabShell title="記録" active="logs"><LogsPage /></TabShell>;
+  else if (a === "map") page = <TabShell title="相関図" active="map"><MapPage /></TabShell>;
   else if (a === "org") page = <TabShell title="組織" active="org"><OrgPage /></TabShell>;
   else if (a === "settings") page = <TabShell title="設定" active="settings"><SettingsPage /></TabShell>;
   else page = <TabShell title="人間図鑑" active=""><PeopleList /></TabShell>;

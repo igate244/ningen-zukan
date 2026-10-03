@@ -9,6 +9,8 @@ import {
 import { navigate } from "../router";
 import { alive, deleteRelation, lastMetMap, saveRelation, savePerson, useData } from "../store";
 import { Avatar, Icon, PersonPicker, TopBar } from "./common";
+import { GraphView } from "./GraphView";
+import { buildRadial } from "../graph";
 
 type Tab = "info" | "manual" | "logs" | "links";
 const TAB_LABEL: Record<Tab, string> = { info: "概要", manual: "取説", logs: "記録", links: "つながり" };
@@ -29,10 +31,10 @@ const KV = ({ items }: { items: Array<[string, ReactNode | undefined, boolean?]>
   );
 };
 
-export const PersonDetail = ({ id }: { id: string }) => {
+export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: string }) => {
   const data = useData();
   const person = data.persons.find((p) => p.id === id && !p.deleted);
-  const [tab, setTabState] = useState<Tab>(lastTab.get(id) ?? "info");
+  const [tab, setTabState] = useState<Tab>((initialTab && initialTab in TAB_LABEL ? (initialTab as Tab) : undefined) ?? lastTab.get(id) ?? "info");
   const setTab = (t: Tab): void => {
     lastTab.set(id, t);
     setTabState(t);
@@ -81,8 +83,8 @@ export const PersonDetail = ({ id }: { id: string }) => {
           <button type="button" className="btn primary" onClick={() => navigate(`/log/new?p=${id}`)}>
             <Icon name="pen" size={16} /> 記録する
           </button>
-          <button type="button" className="btn" onClick={() => setTab("links")}>
-            <Icon name="link" size={16} /> つながり
+          <button type="button" className="btn" onClick={() => navigate(`/map?c=${id}`)}>
+            <Icon name="map" size={16} /> 相関図
           </button>
         </div>
 
@@ -307,6 +309,7 @@ const LinksTab = ({ person }: { person: Person }) => {
     [data.relations, person.id],
   );
   const byId = useMemo(() => new Map(data.persons.filter((p) => !p.deleted).map((p) => [p.id, p])), [data.persons]);
+  const mini = useMemo(() => buildRadial(data, person.id, 1), [data, person.id]);
 
   const add = (otherId: string): void => {
     const c = RELATION_CHOICES.find((x) => x.key === choice) ?? RELATION_CHOICES[0];
@@ -330,8 +333,20 @@ const LinksTab = ({ person }: { person: Person }) => {
         </button>
       </div>
 
+      {rels.length > 0 && (
+        <div className="section">
+          <div className="graph-box framed">
+            <GraphView graph={mini} centerId={person.id} height={300}
+              onTap={(oid) => navigate(oid === person.id ? `/map?c=${oid}` : `/p/${oid}`)} />
+          </div>
+          <button type="button" className="text-btn small" style={{ marginTop: 4 }} onClick={() => navigate(`/map?c=${person.id}`)}>
+            相関図で広く見る →
+          </button>
+        </div>
+      )}
+
       {rels.length === 0 ? (
-        <div className="empty">まだつながりがありません</div>
+        <div className="empty">まだつながりがありません。上で関係を選んで、相手を選ぶと登録されます。</div>
       ) : (
         <div className="section list card">
           {rels.map((r) => {

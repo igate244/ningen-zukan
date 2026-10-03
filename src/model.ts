@@ -226,3 +226,7 @@ export const normalizePerson = (raw: Partial<Person> & { id: string }): Person =
   favors: Array.isArray(raw.favors) ? raw.favors : [],
   category: (CATEGORIES as readonly string[]).includes(raw.category ?? "") ? (raw.category as Category) : "other",
 });
+
+/** 表示名（自分は「名前（自分）」、名前が未設定なら「自分」） */
+export const selfLabel = (p: Pick<Person, "name" | "isSelf">): string =>
+  p.isSelf ? (p.name && p.name !== "自分" ? `${p.name}（自分）` : "自分") : p.name;

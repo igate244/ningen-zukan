@@ -40,8 +40,8 @@ const importFromMyme = (json: Record<string, unknown>): { added: number; skipped
     return p;
   };
   const toBirth = (raw?: unknown): Pick<Person, "birthDate" | "birthYearUnknown"> => {
+    if (typeof raw !== "string") return {};
     let b = raw;
-    if (typeof b !== "string") return {};
     // 「2001/04/09」のようなスラッシュ区切りもハイフンにそろえる
     const ymd = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/.exec(b.trim());
     if (ymd) b = `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;

@@ -11,6 +11,10 @@
   --accent-soft: #e3efed;
   --danger: #b4423a;
   --warn: #a8701a;
+  --edge-family: #c07a4f;
+  --edge-work: #4f7fb0;
+  --edge-friend: #5a9a5f;
+  --edge-other: #9a978f;
   --radius: 14px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
   --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
@@ -30,6 +34,10 @@
     --accent-soft: #23393a;
     --danger: #e0786f;
     --warn: #d9a654;
+    --edge-family: #d9935f;
+    --edge-work: #6f9fd0;
+    --edge-friend: #7cbb80;
+    --edge-other: #7d7a74;
     --shadow: none;
     color-scheme: dark;
   }
@@ -236,3 +244,32 @@ a { color: var(--accent); }
 .sync-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 10px; }
 .banner .grow { flex: 1; }
+
+/* ---------------------------------------------------------------- 相関図 */
+.map-page { display: flex; flex-direction: column; gap: 8px; margin: -4px -16px 0; }
+.map-controls { display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+.map-center {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 5px;
+  border: 1px solid var(--line); background: var(--surface); border-radius: 999px; font-weight: 700;
+}
+.map-center-name { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.segment.small-seg { margin-top: 0; position: static; flex: none; }
+.segment.small-seg button { padding: 6px 12px; }
+.segment.tiny-seg { margin-top: 0; position: static; flex: none; padding: 2px; }
+.segment.tiny-seg button { padding: 3px 10px; font-size: 11px; white-space: nowrap; }
+.map-sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 16px; flex-wrap: wrap; }
+.map-hint { text-align: center; padding: 0 16px; }
+.graph-box { position: relative; width: 100%; background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
+.graph-box.framed { border: 1px solid var(--line); border-radius: var(--radius); }
+.graph-box text { font-family: var(--font); user-select: none; -webkit-user-select: none; }
+.graph-box .g-name { fill: var(--text); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.graph-box .g-sub { fill: var(--text-3); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.graph-zoom { position: absolute; right: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.graph-zoom button {
+  width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
+  font-size: 18px; font-weight: 700; color: var(--text-2); box-shadow: var(--shadow);
+}
+.graph-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--text-2); }
+.graph-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.graph-legend i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; }
+.graph-legend i.dash { background: repeating-linear-gradient(90deg, var(--edge-other) 0 4px, transparent 4px 7px); }

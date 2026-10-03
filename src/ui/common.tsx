@@ -2,7 +2,7 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 import { useImageUrl } from "../image";
-import type { Person } from "../model";
+import { type Person, selfLabel } from "../model";
 import { goBack } from "../router";
 import { alive, useData } from "../store";
 
@@ -24,6 +24,7 @@ const PATHS: Record<string, string> = {
   link: "M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71",
   chevron: "M9 18l6-6-6-6",
   down: "M6 9l6 6 6-6",
+  map: "M12 12m-3 0a3 3 0 106 0 3 3 0 10-6 0M5 5m-2 0a2 2 0 104 0 2 2 0 10-4 0M19 5m-2 0a2 2 0 104 0 2 2 0 10-4 0M5 19m-2 0a2 2 0 104 0 2 2 0 10-4 0M19 19m-2 0a2 2 0 104 0 2 2 0 10-4 0M6.5 6.5l3.3 3.3M17.5 6.5l-3.3 3.3M6.5 17.5l3.3-3.3M17.5 17.5l-3.3-3.3",
 };
 
 export const Icon = ({ name, size = 20, fill = false }: { name: keyof typeof PATHS | string; size?: number; fill?: boolean }) => (
@@ -131,7 +132,7 @@ export const PersonPicker = ({
               <button type="button" key={p.id} className="row" onClick={() => toggle(p.id)}>
                 <Avatar person={p} size={34} />
                 <div className="row-main">
-                  <div className="row-name">{p.isSelf ? `${p.name}（自分）` : p.name}</div>
+                  <div className="row-name">{selfLabel(p)}</div>
                   <div className="row-sub">{[p.org, p.dept, p.title].filter(Boolean).join(" ・ ")}</div>
                 </div>
                 {multiple && (
