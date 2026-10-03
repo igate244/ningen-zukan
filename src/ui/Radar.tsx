@@ -1,8 +1,7 @@
 // src/ui/Radar.tsx — 自分から見たその人のレーダーチャート（6 軸、各 1〜5）
 
-import { FEEL_AXES, type Person } from "../model";
-import { savePerson } from "../store";
-import { FeelingMeter } from "./Feeling";
+import { FEEL_AXES, type Person, feelingType } from "../model";
+import { navigate } from "../router";
 
 export const RelationRadar = ({ person }: { person: Person }) => {
   const axes = FEEL_AXES.map((a) => ({ ...a, value: person[a.key] }));
@@ -17,7 +16,7 @@ export const RelationRadar = ({ person }: { person: Person }) => {
   const poly = axes.map((ax, i) => pt(i, ax.value ?? 0).join(",")).join(" ");
 
   return (
-    <div className="card radar">
+    <button type="button" className="card radar" onClick={() => navigate(`/p/${person.id}/edit`)} aria-label="気持ちを編集">
       <svg viewBox={`0 0 ${size} ${size}`} width="100%" style={{ maxWidth: 290, display: "block", margin: "0 auto" }} role="img" aria-label="自分から見たこの人">
         {[1, 2, 3, 4, 5].map((v) => (
           <polygon key={v} points={axes.map((_, i) => pt(i, v).join(",")).join(" ")} fill="none" stroke="var(--line)" strokeWidth={v === 3 ? 1.4 : 1} />
@@ -41,8 +40,9 @@ export const RelationRadar = ({ person }: { person: Person }) => {
           );
         })}
       </svg>
-      {filled < 3 && <div className="small muted" style={{ textAlign: "center", marginBottom: 6 }}>3つ以上付けると形が出ます</div>}
-      <FeelingMeter bare person={person} onChange={(patch) => void savePerson({ ...person, ...patch })} />
-    </div>
+      <div className="small muted" style={{ textAlign: "center", marginBottom: 4 }}>
+        {filled < 3 ? "タップして「自分からの気持ち」を付けると形が出ます" : feelingType(person.like, person.trust) ?? "タップで編集"}
+      </div>
+    </button>
   );
 };

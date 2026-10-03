@@ -350,7 +350,7 @@ a { color: var(--accent); }
   background: linear-gradient(to top, var(--bg) 70%, transparent);
 }
 .save-bar .btn { max-width: 608px; width: 100%; padding: 12px; font-size: 16px; }
-.radar { padding: 12px 10px; }
+.radar { padding: 12px 10px; display: block; width: 100%; text-align: inherit; font: inherit; color: inherit; cursor: pointer; }
 .radar-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; padding: 4px 8px 0; }
 
 /* ---------------------------------------------------------------- カレンダー */
