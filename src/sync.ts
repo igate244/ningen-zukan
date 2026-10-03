@@ -62,10 +62,11 @@ export const mergeData = (local: AppData, remote: AppData): AppData => ({
   relations: mergeList(local.relations, remote.relations ?? []),
   logs: mergeList(local.logs, remote.logs ?? []),
   images: mergeImages(local.images, remote.images ?? []),
+  groups: mergeList(local.groups ?? [], remote.groups ?? []),
 });
 
 const fingerprint = (d: AppData): string =>
-  [d.persons, d.relations, d.logs, d.images]
+  [d.persons, d.relations, d.logs, d.images, d.groups ?? []]
     .map((list) => list.map((x) => `${x.id}:${x.updatedAt}:${(x as ImageMeta).driveId ?? ""}`).sort().join(","))
     .join("|");
 

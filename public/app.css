@@ -284,3 +284,71 @@ a { color: var(--accent); }
 .graph-legend i.dot { background: repeating-linear-gradient(90deg, var(--edge-family) 0 2px, transparent 2px 6px); }
 .graph-legend i.dbl { height: 6px; background: none; border-top: 2px solid var(--edge-family); border-bottom: 2px solid var(--edge-family); border-radius: 0; }
 .graph-legend b.x { position: absolute; left: 3px; top: -7px; font-size: 11px; color: var(--danger); }
+.chip.mood-close.on { background: var(--accent); }
+.chip.mood-cool.on { background: var(--text-3); border-color: var(--text-3); }
+.chip.mood-bad.on { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* ---------------------------------------------------------------- グループ */
+.group-icon { width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex: none; }
+.avatar-stack { display: flex; }
+.avatar-stack > * { margin-left: -6px; box-shadow: 0 0 0 2px var(--surface); }
+.badge.link { border: none; cursor: pointer; }
+
+/* ---------------------------------------------------------------- 入力画面（連絡先アプリ風） */
+.edit-main { padding-bottom: calc(env(safe-area-inset-bottom) + 160px); }
+.edit-head { display: flex; gap: 14px; align-items: flex-start; margin-top: 6px; }
+.edit-photo { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; padding-top: 6px; flex: none; }
+.edit-photo-label { font-size: 12px; color: var(--accent); font-weight: 700; }
+.grow { flex: 1; min-width: 0; }
+
+.fgroup { margin-top: 18px; }
+.fgroup-title { font-size: 12px; font-weight: 700; color: var(--text-3); margin: 0 4px 6px; letter-spacing: 0.06em; }
+.fgroup-body { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.fgroup-foot { font-size: 11px; color: var(--text-3); margin: 6px 4px 0; }
+
+.frow { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.fgroup-body > :last-child, .fgroup-body > div:last-child > .frow:last-child { border-bottom: none; }
+.frow-label { width: 84px; flex: none; font-size: 13px; color: var(--text-2); font-weight: 600; }
+.frow-input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 16px; padding: 8px 0; color: var(--text); }
+.frow-input::placeholder { color: var(--text-3); opacity: 0.7; }
+.frow-input.boxed { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 15px; }
+.frow-area { align-items: flex-start; }
+.frow-area .frow-label { padding-top: 10px; }
+.frow-area textarea { resize: none; line-height: 1.6; overflow: hidden; }
+.frow-switch { cursor: pointer; }
+.frow-block { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.career { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px dashed var(--line); border-radius: 12px; }
+.icon-char { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius); }
+
+/* スイッチ（iOS 風） */
+.switch { appearance: none; -webkit-appearance: none; width: 46px; height: 28px; border-radius: 999px; background: var(--line); position: relative; flex: none; cursor: pointer; transition: background 0.15s; margin: 0; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform 0.15s; }
+.switch:checked { background: var(--accent); }
+.switch:checked::after { transform: translateX(18px); }
+
+/* 切り替えボタン */
+.seg { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; background: var(--surface-2); border-radius: 10px; padding: 3px; }
+.seg button { flex: 1 0 auto; border: none; background: transparent; padding: 6px 8px; border-radius: 8px; font-size: 13px; font-weight: 700; color: var(--text-2); }
+.seg button.on { background: var(--surface); color: var(--accent); box-shadow: var(--shadow); }
+
+/* タグ・グループ */
+.token-box { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; align-items: center; }
+.token-box.flat { padding: 0; }
+.token-input { flex: 1; min-width: 120px; border: none; outline: none; background: transparent; font-size: 15px; padding: 6px 2px; }
+.token-suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip.ghost { background: transparent; border-style: dashed; color: var(--text-2); }
+.chip-x { border: none; background: transparent; color: inherit; margin-left: 4px; padding: 0 2px; font-size: 14px; line-height: 1; }
+
+.add-fields { margin-top: 22px; display: flex; flex-direction: column; gap: 10px; }
+.add-fields-row { display: flex; flex-direction: column; gap: 6px; }
+.add-fields-head { font-size: 11px; color: var(--text-3); font-weight: 700; margin-left: 4px; }
+
+.save-bar {
+  position: fixed; left: 0; right: 0; z-index: 9;
+  bottom: calc(env(safe-area-inset-bottom) + 58px);
+  display: flex; justify-content: center; padding: 8px 16px;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+}
+.save-bar .btn { max-width: 608px; width: 100%; padding: 12px; font-size: 16px; }
+.radar { padding: 12px 10px; }
+.radar-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; padding: 4px 8px 0; }

@@ -18,7 +18,7 @@ const SORT_LABEL: Record<Sort, string> = {
 };
 
 // 一覧の状態は画面を離れても覚えておく（詳細から戻ったときに検索がリセットされないように）
-const memo = { q: "", cat: "all" as Category | "all", sort: "birthday" as Sort, tag: "" };
+const memo = { q: "", cat: "all" as Category | "all", sort: "birthday" as Sort, tag: "", group: "" };
 
 export const PeopleList = () => {
   const data = useData();
@@ -26,7 +26,9 @@ export const PeopleList = () => {
   const [cat, setCat] = useState<Category | "all">(memo.cat);
   const [sort, setSort] = useState<Sort>(memo.sort);
   const [tag, setTag] = useState(memo.tag);
-  Object.assign(memo, { q, cat, sort, tag });
+  const [group, setGroup] = useState(memo.group);
+  Object.assign(memo, { q, cat, sort, tag, group });
+  const groups = useMemo(() => alive(data.groups ?? []), [data.groups]);
 
   const lastMet = useMemo(() => lastMetMap(data), [data]);
   const persons = useMemo(() => alive(data.persons).filter((p) => !p.isSelf), [data.persons]);
@@ -37,7 +39,7 @@ export const PeopleList = () => {
     const hit = (p: Person): boolean =>
       !query ||
       [p.name, p.kana, p.nickname, p.org, p.dept, p.title, p.note, ...p.tags].some((s) => s?.toLowerCase().includes(query));
-    const filtered = persons.filter((p) => (cat === "all" || p.category === cat) && (!tag || p.tags.includes(tag)) && hit(p));
+    const filtered = persons.filter((p) => (cat === "all" || p.category === cat) && (!tag || p.tags.includes(tag)) && (!group || p.groups.includes(group)) && hit(p));
     const byKana = (a: Person, b: Person): number => (a.kana || a.name).localeCompare(b.kana || b.name, "ja");
     return filtered.sort((a, b) => {
       if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
@@ -62,7 +64,7 @@ export const PeopleList = () => {
           return byKana(a, b);
       }
     });
-  }, [persons, q, cat, tag, sort, lastMet]);
+  }, [persons, q, cat, tag, group, sort, lastMet]);
 
   // 今日・明日が誕生日の人
   const soon = useMemo(
@@ -108,6 +110,11 @@ export const PeopleList = () => {
         {CATEGORIES.map((c) => (
           <button type="button" key={c} className={`chip ${cat === c ? "on" : ""}`} onClick={() => setCat(cat === c ? "all" : c)}>
             {CATEGORY_LABEL[c]}
+          </button>
+        ))}
+        {groups.map((g) => (
+          <button type="button" key={`g-${g.id}`} className={`chip ${group === g.id ? "on" : ""}`} onClick={() => setGroup(group === g.id ? "" : g.id)}>
+            {g.name}
           </button>
         ))}
         {allTags.map((t) => (

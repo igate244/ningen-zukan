@@ -6,12 +6,12 @@ import { SELF_ID, selfLabel } from "../model";
 import { navigate, useRoute } from "../router";
 import { alive, useData } from "../store";
 import { Avatar, Icon, PersonPicker } from "./common";
-import { GraphLegend, GraphView } from "./GraphView";
+import { GraphLegend, GraphView, MoodLegend } from "./GraphView";
 
 type Mode = "radial" | "family";
 
 // 画面を離れても最後に見ていた状態を覚えておく
-const memo = { center: SELF_ID, mode: "radial" as Mode, depth: 2 as 1 | 2, collapse: { down: new Set<string>(), up: new Set<string>() } as Collapse };
+const memo = { showMood: true, center: SELF_ID, mode: "radial" as Mode, depth: 2 as 1 | 2, collapse: { down: new Set<string>(), up: new Set<string>() } as Collapse };
 
 export const MapPage = () => {
   const data = useData();
@@ -25,6 +25,15 @@ export const MapPage = () => {
   const [mode, setModeState] = useState<Mode>((query.get("m") as Mode) || memo.mode);
   const [depth, setDepthState] = useState<1 | 2>(memo.depth);
   const [collapse, setCollapse] = useState<Collapse>(memo.collapse);
+  const [showMood, setShowMood] = useState(memo.showMood);
+  const toggleGroup = (gid: string): void => {
+    const open = new Set(collapse.groupsOpen ?? []);
+    if (open.has(gid)) open.delete(gid);
+    else open.add(gid);
+    const next = { ...collapse, groupsOpen: open };
+    memo.collapse = next;
+    setCollapse(next);
+  };
   const toggle = (t: GToggle): void => {
     const set = new Set(t.dir === "down" ? collapse.down : collapse.up);
     for (const id of t.ids) {
@@ -88,6 +97,13 @@ export const MapPage = () => {
           </div>
         </div>
       )}
+      <div className="map-sub">
+        <label className="check-inline small">
+          <input type="checkbox" checked={showMood} onChange={(e) => { memo.showMood = e.target.checked; setShowMood(e.target.checked); }} />
+          関係の温度を表示
+        </label>
+        {showMood && <MoodLegend />}
+      </div>
       {mode === "family" && (
         <div className="map-sub">
           <GraphLegend family />
@@ -109,7 +125,7 @@ export const MapPage = () => {
         </div>
       ) : (
         <GraphView graph={graph} centerId={centerId} height="calc(100dvh - 250px - env(safe-area-inset-bottom))"
-          onTap={(id) => (id === centerId ? navigate(`/p/${id}`) : setCenter(id))} onToggle={toggle} />
+          onTap={(id) => (id.startsWith("grp:") ? toggleGroup(id.slice(4)) : id === centerId ? navigate(`/p/${id}`) : setCenter(id))} onToggle={toggle} showMood={showMood} />
       )}
 
       {!lonely && (

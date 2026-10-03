@@ -40,8 +40,10 @@ const readPersons = () =>
     req.onerror = () => resolve([]);
     req.onsuccess = () => {
       try {
-        const q = req.result.transaction("persons").objectStore("persons").getAll();
-        q.onsuccess = () => resolve(q.result || []);
+        const dbh = req.result;
+        const q = dbh.transaction("persons").objectStore("persons").getAll();
+        // アプリ側の版上げを邪魔しないよう、読んだらすぐ閉じる
+        q.onsuccess = () => { resolve(q.result || []); dbh.close(); };
         q.onerror = () => resolve([]);
       } catch {
         resolve([]);

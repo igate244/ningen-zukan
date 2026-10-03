@@ -5,11 +5,13 @@
 //   家系図（family）: 親子・夫婦・兄弟のつながりだけをたどり、世代ごとに横一列に並べる
 
 import { childrenOf, compareAge, exSpousesOf, familyIndex, kinLabel, parentsOf, siblingsOf, sortByAge, spousesOf } from "./family";
-import { type AppData, type Person, type Relation, type RelType, relationLabelFrom } from "./model";
+import { type AppData, type Mood, type Person, type Relation, type RelType, SELF_ID as SELF_ID_FOR_GRAPH, relationLabelFrom } from "./model";
 
 export interface GNode {
   id: string;
   person: Person;
+  /** グループの丸（人ではない） */
+  group?: { id: string; name: string; count: number; open: boolean };
   x: number;
   y: number;
   /** 名前の下に出す説明（真ん中の人から見た関係など） */
@@ -25,8 +27,10 @@ export interface GEdge {
   kind: "family" | "work" | "friend" | "other" | "spouse" | "exspouse";
   /** 中心からたどった線以外（相関図では薄く描く） */
   faint?: boolean;
-  /** 弧を描いて、間にいる人の上を越える */
-  curve?: number;
+  /** 弧を描くときの制御点（2 次ベジェ）。間にいる人をよけるため */
+  control?: [number, number];
+  /** 関係の温度（直接のつながりの線だけ） */
+  mood?: Mood;
 }
 
 /** 家系図の「開く・たたむ」ボタン */
@@ -55,6 +59,8 @@ export interface Collapse {
   down: Set<string>;
   /** この人の親から上をたたむ */
   up: Set<string>;
+  /** 相関図で開いているグループ */
+  groupsOpen?: Set<string>;
 }
 
 export const NODE_R = 26;
@@ -507,7 +513,7 @@ export const buildFamily = (
     const b = pos.get(r.b)!;
     if (a.y !== b.y) continue;
     const [l, rr] = a.x < b.x ? [a, b] : [b, a];
-    edges.push({ id: r.id, rel: r, kind: r.type === "exspouse" ? "exspouse" : "spouse", points: [[l.x + NODE_R, l.y], [rr.x - NODE_R, rr.y]] });
+    edges.push({ id: r.id, rel: r, kind: r.type === "exspouse" ? "exspouse" : "spouse", points: [[l.x + NODE_R, l.y], [rr.x - NODE_R, rr.y]], mood: r.mood });
   }
   // 親子：両親がそろっていれば夫婦の線の真ん中から、片親なら親の真下から下ろす。
   // 同じ親の組の子は一本の横線にまとめ、親の組ごとに横線の高さを変える
@@ -618,68 +624,145 @@ export const buildCombined = (data: AppData, centerId: string, maxDepth: 1 | 2, 
 
   // 中心の人とつながる家族以外の人（と、その先の人）
   const nonFam = (r: Relation): boolean => !FAMILY.includes(r.type);
-  const ring1: Array<{ id: string; r: Relation }> = [];
+  const ring1: Array<{ id: string; r?: Relation }> = [];
   for (const r of adj.get(centerId) ?? []) {
     const o = other(r, centerId);
     if (nonFam(r) && !pos.has(o) && !ring1.some((x) => x.id === o)) ring1.push({ id: o, r });
   }
+
+  // ---- グループ：同じグループの人は「◯◯ 12人」の丸にまとめる（タップで開く）
+  const groups = new Map((data.groups ?? []).filter((g) => !g.deleted).map((g) => [g.id, g]));
+  const centerGroups = (persons.get(centerId)?.groups ?? []).filter((g) => groups.has(g));
+  // 自分が入っているグループの仲間は、直接のつながりが無くても候補に入れる
+  for (const p of persons.values()) {
+    if (p.id === centerId || pos.has(p.id) || ring1.some((x) => x.id === p.id)) continue;
+    if (p.groups.some((g) => centerGroups.includes(g))) ring1.push({ id: p.id });
+  }
+  const bucketOf = new Map<string, string>();
+  const count = new Map<string, number>();
+  for (const { id } of ring1) for (const g of persons.get(id)!.groups) if (groups.has(g)) count.set(g, (count.get(g) ?? 0) + 1);
+  for (const { id } of ring1) {
+    const gs = persons.get(id)!.groups.filter((g) => groups.has(g));
+    const pick = gs.find((g) => centerGroups.includes(g)) ?? gs.filter((g) => (count.get(g) ?? 0) >= 2).sort((a, b) => count.get(b)! - count.get(a)!)[0];
+    if (pick) bucketOf.set(id, pick);
+  }
+  const buckets = new Map<string, string[]>();
+  for (const [id, g] of bucketOf) buckets.set(g, [...(buckets.get(g) ?? []), id]);
+  // 1 人だけのグループは丸にせず、そのまま並べる
+  for (const [g, ids] of buckets) if (ids.length < 2 && !centerGroups.includes(g)) { buckets.delete(g); ids.forEach((i) => bucketOf.delete(i)); }
+  const singles = ring1.filter((x) => !bucketOf.has(x.id));
+  const openSet = collapse?.groupsOpen ?? new Set<string>();
+
   // 並び順：上司 → 同僚 → 部下（左列）、友人 → 紹介 → その他（右列）
-  const rank = (r: Relation, o: string): number => {
+  const rank = (r: Relation | undefined, o: string): number => {
+    if (!r) return 3;
     if (r.type === "boss") return r.a === o ? 0 : 2;
     if (r.type === "colleague") return 1;
     if (r.type === "friend") return 0;
     if (r.type === "introduced") return 1;
     return 2;
   };
-  const left = ring1.filter((x) => edgeKind(x.r.type) === "work").sort((a, b) => rank(a.r, a.id) - rank(b.r, b.id));
-  const right = ring1.filter((x) => edgeKind(x.r.type) !== "work").sort((a, b) => rank(a.r, a.id) - rank(b.r, b.id));
+  type Item = { kind: "person"; id: string; r?: Relation } | { kind: "group"; gid: string; ids: string[] };
+  const isWork = (it: Item): boolean =>
+    it.kind === "person" ? !!it.r && edgeKind(it.r.type) === "work" : groups.get(it.gid)!.kind === "work";
+  const items: Item[] = [
+    ...singles.map((x): Item => ({ kind: "person", id: x.id, r: x.r })),
+    ...[...buckets.entries()].map(([gid, ids]): Item => ({ kind: "group", gid, ids })),
+  ];
+  const order = (a: Item, b: Item): number =>
+    (a.kind === "group" ? 5 : rank(a.r, a.id)) - (b.kind === "group" ? 5 : rank(b.r, b.id));
+  const left = items.filter(isWork).sort(order);
+  const right = items.filter((x) => !isWork(x)).sort(order);
 
   const famXs = nodes.map((n) => n.x);
   const colL = Math.min(...famXs) - 150;
   const colR = Math.max(...famXs) + 150;
   const ROW = 96;
   const label = (r: Relation, viewer: string, o: string): string => (r.labelBy === viewer ? r.label : undefined) ?? kinLabel(fx, viewer, o) ?? relationLabelFrom(r, viewer);
+  const relWithCenter = (id: string): Relation | undefined => rels.find((r) => (r.a === centerId && r.b === id) || (r.b === centerId && r.a === id));
+  const groupEdges: GEdge[] = [];
 
-  const placeCol = (list: typeof ring1, colX: number, outward: number): void => {
-    list.forEach(({ id, r }, i) => {
+  const placeCol = (list: Item[], colX: number, outward: number): void => {
+    let outerNext = -Infinity; // 外側の列で次に置ける高さ
+    list.forEach((it, i) => {
       const y = c.y + (i - (list.length - 1) / 2) * ROW;
-      const n: GNode = { id, person: persons.get(id)!, x: colX, y, sub: label(r, centerId, id), depth: 1 };
-      nodes.push(n);
-      pos.set(id, n);
+      if (it.kind === "person") {
+        const r = it.r;
+        const n: GNode = { id: it.id, person: persons.get(it.id)!, x: colX, y, sub: r ? label(r, centerId, it.id) : undefined, depth: 1 };
+        nodes.push(n);
+        pos.set(it.id, n);
+        return;
+      }
+      const g = groups.get(it.gid)!;
+      const open = openSet.has(it.gid);
+      const gid = `grp:${it.gid}`;
+      const gn: GNode = {
+        id: gid,
+        person: { id: gid, name: g.name } as Person,
+        x: colX, y, depth: 1,
+        sub: `${it.ids.length}人${open ? "" : "（タップで開く）"}`,
+        group: { id: g.id, name: g.name, count: it.ids.length, open },
+      };
+      nodes.push(gn);
+      pos.set(gid, gn);
+      // 中心とグループの丸を結ぶ
+      groupEdges.push({ id: `${gid}-c`, rel: { id: gid, a: centerId, b: gid, type: "other", createdAt: 0, updatedAt: 0 }, kind: g.kind === "work" ? "work" : "friend", points: [[c.x, c.y], [colX, y]] });
+      if (!open) return;
+      // 開いたグループの人は外側の列に縦に並べる
+      const ids = sortByAge(fx, it.ids);
+      const start = Math.max(outerNext, y - ((ids.length - 1) / 2) * 76);
+      ids.forEach((id, j) => {
+        const my = start + j * 76;
+        const r = relWithCenter(id);
+        const n: GNode = { id, person: persons.get(id)!, x: colX + outward * 150, y: my, sub: r ? label(r, centerId, id) : g.name, depth: 2 };
+        nodes.push(n);
+        pos.set(id, n);
+        groupEdges.push({ id: `${gid}-${id}`, rel: { id: `${gid}-${id}`, a: gid, b: id, type: "other", createdAt: 0, updatedAt: 0 }, kind: "other", points: [[colX, y], [n.x, my]], faint: false });
+      });
+      outerNext = start + ids.length * 76 + 20;
     });
     if (maxDepth < 2) return;
-    // その人の先（家族以外のつながり）をさらに外側の列へ
-    let extra = 0;
-    for (const { id } of list) {
-      const outs = (adj.get(id) ?? []).filter((r) => nonFam(r) && !pos.has(other(r, id)));
+    // 個人のその先（家族以外のつながり）をさらに外側の列へ
+    for (const it of list) {
+      if (it.kind !== "person") continue;
+      const outs = (adj.get(it.id) ?? []).filter((r) => nonFam(r) && !pos.has(other(r, it.id)));
       outs.forEach((r, j) => {
-        const o = other(r, id);
+        const o = other(r, it.id);
         if (pos.has(o)) return;
-        const base = pos.get(id)!;
-        const n: GNode = {
-          id: o, person: persons.get(o)!, x: colX + outward * 140, y: base.y + (j - (outs.length - 1) / 2) * 70 + extra * 0,
-          sub: `${persons.get(id)!.name}の${label(r, id, o)}`, depth: 2,
-        };
+        const base = pos.get(it.id)!;
+        const yy = Math.max(outerNext, base.y + (j - (outs.length - 1) / 2) * 70);
+        const n: GNode = { id: o, person: persons.get(o)!, x: colX + outward * 150, y: yy, sub: `${persons.get(it.id)!.name}の${label(r, it.id, o)}`, depth: 2 };
         nodes.push(n);
         pos.set(o, n);
+        outerNext = yy + 70;
       });
-      extra++;
     }
   };
   placeCol(left, colL, -1);
   placeCol(right, colR, 1);
+  edges.push(...groupEdges);
 
-  // 線（家族以外）
+  // 線（家族以外）。グループで開いた人と中心の線は丸を経由して見せるので引かない
   for (const r of rels) {
     if (!nonFam(r) || !pos.has(r.a) || !pos.has(r.b)) continue;
     const a = pos.get(r.a)!;
     const b = pos.get(r.b)!;
-    // 家系図の人の上を通らないよう、中心からの線は上に弧を描く
-    const between = nodes.some((n) => n !== a && n !== b && Math.abs(n.y - a.y) < 40 && (n.x - a.x) * (n.x - b.x) < 0);
+    const viaGroup = (r.a === centerId && bucketOf.has(r.b)) || (r.b === centerId && bucketOf.has(r.a));
+    if (viaGroup) continue;
+    let control: [number, number] | undefined;
+    if (Math.abs(a.x - b.x) < 1) {
+      // 同じ列の人どうしは外側にふくらませる
+      const out = a.x < c.x ? -1 : 1;
+      control = [a.x + out * 70, (a.y + b.y) / 2];
+    } else if (nodes.some((n) => n !== a && n !== b && Math.abs(n.y - a.y) < 40 && (n.x - a.x) * (n.x - b.x) < 0)) {
+      // 家系図の人の上を通らないよう、弧を描いて越える
+      control = [(a.x + b.x) / 2, Math.min(a.y, b.y) - 110];
+    }
     edges.push({
       id: r.id, rel: r, kind: edgeKind(r.type), points: [[a.x, a.y], [b.x, b.y]],
-      faint: r.a !== centerId && r.b !== centerId && a.depth !== 1 && b.depth !== 1,
-      curve: between ? 110 : undefined,
+      faint: r.a !== centerId && r.b !== centerId && a.depth !== 1 && b.depth !== 1 && !r.mood,
+      control,
+      mood: r.mood,
     });
   }
 
@@ -689,7 +772,48 @@ export const buildCombined = (data: AppData, centerId: string, maxDepth: 1 | 2, 
   const mx = (Math.min(...allX) + Math.max(...allX)) / 2;
   const my = (Math.min(...allY) + Math.max(...allY)) / 2;
   const shifted = nodes.map((n) => ({ ...n, x: n.x - mx, y: n.y - my }));
-  const shiftedEdges = edges.map((e) => ({ ...e, points: e.points.map(([px, py]) => [px - mx, py - my] as [number, number]) }));
+  const shiftedEdges = edges.map((e) => ({
+    ...e,
+    points: e.points.map(([px, py]) => [px - mx, py - my] as [number, number]),
+    control: e.control ? ([e.control[0] - mx, e.control[1] - my] as [number, number]) : undefined,
+  }));
   const toggles = (famGraph.toggles ?? []).map((t) => ({ ...t, x: t.x - mx, y: t.y - my }));
   return { nodes: shifted, edges: shiftedEdges, toggles, ...bounds(shifted) };
+};
+
+// ===================================================================== グループの図
+//
+// メンバーを円に並べて、メンバーどうしのつながり（温度つき）を線で結ぶ。自分が入っていれば真ん中。
+
+export const buildGroup = (data: AppData, groupId: string): Graph => {
+  const { persons, rels } = aliveIndex(data);
+  const fx = familyIndex(data);
+  const members = sortByAge(fx, [...persons.values()].filter((p) => p.groups.includes(groupId)).map((p) => p.id));
+  if (!members.length) return { nodes: [], edges: [], width: 0, height: 0 };
+  const centerIn = members.includes(SELF_ID_FOR_GRAPH) ? SELF_ID_FOR_GRAPH : null;
+  const ring = members.filter((m) => m !== centerIn);
+  const R = Math.max(120, (ring.length * 96) / (2 * Math.PI));
+  const nodes: GNode[] = [];
+  if (centerIn) nodes.push({ id: centerIn, person: persons.get(centerIn)!, x: 0, y: 0, depth: 0 });
+  ring.forEach((id, i) => {
+    const a = -Math.PI / 2 + (i / ring.length) * Math.PI * 2;
+    nodes.push({ id, person: persons.get(id)!, x: Math.cos(a) * R, y: Math.sin(a) * R, depth: 1 });
+  });
+  const pos = new Map(nodes.map((n) => [n.id, n]));
+  const edges: GEdge[] = rels
+    .filter((r) => pos.has(r.a) && pos.has(r.b))
+    .map((r) => {
+      const a = pos.get(r.a)!;
+      const b = pos.get(r.b)!;
+      const kind = edgeKind(r.type);
+      // 夫婦の二重線は家系図向けなので、ここでは普通の線にする
+      return { id: r.id, rel: r, kind: kind === "spouse" || kind === "exspouse" ? "family" : kind, points: [[a.x, a.y], [b.x, b.y]] as Array<[number, number]>, mood: r.mood };
+    });
+  // 呼び名：自分が入っていれば自分から見た関係
+  if (centerIn) for (const n of nodes) {
+    if (n.id === centerIn) continue;
+    const r = rels.find((x) => (x.a === centerIn && x.b === n.id) || (x.b === centerIn && x.a === n.id));
+    if (r) n.sub = (r.labelBy === centerIn ? r.label : undefined) ?? kinLabel(fx, centerIn, n.id) ?? relationLabelFrom(r, centerIn);
+  }
+  return { nodes, edges, ...bounds(nodes) };
 };

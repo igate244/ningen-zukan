@@ -6,13 +6,13 @@
 import { useSyncExternalStore } from "react";
 import * as db from "./db";
 import {
-  type AppData, type ImageMeta, type LogEntry, type Person, type Relation,
+  type AppData, type Group, type ImageMeta, type LogEntry, type Person, type Relation,
   SELF_ID, emptyPerson, newId, normalizePerson,
 } from "./model";
 
 type Listener = () => void;
 
-let data: AppData = { persons: [], relations: [], logs: [], images: [] };
+let data: AppData = { persons: [], relations: [], logs: [], images: [], groups: [] };
 let snapshot = { data, rev: 0 };
 const listeners = new Set<Listener>();
 const changeHooks = new Set<Listener>();
@@ -39,13 +39,14 @@ export const getData = (): AppData => data;
 export const useData = (): AppData => useSyncExternalStore(subscribe, () => snapshot).data;
 
 export const load = async (): Promise<void> => {
-  const [persons, relations, logs, images] = await Promise.all([
+  const [persons, relations, logs, images, groups] = await Promise.all([
     db.getAll<Person>("persons"),
     db.getAll<Relation>("relations"),
     db.getAll<LogEntry>("logs"),
     db.getAll<ImageMeta>("images"),
+    db.getAll<Group>("groups"),
   ]);
-  data = { persons: persons.map(normalizePerson), relations, logs, images };
+  data = { persons: persons.map(normalizePerson), relations, logs, images, groups };
   if (!data.persons.some((p) => p.id === SELF_ID)) {
     const self: Person = { ...emptyPerson("自分"), id: SELF_ID, isSelf: true, category: "family" };
     data = { ...data, persons: [...data.persons, self] };
@@ -134,6 +135,46 @@ export const deleteLog = async (id: string): Promise<void> => {
   await db.put("logs", item);
 };
 
+// ---------------------------------------------------------------- グループ
+
+export const saveGroup = async (g: Omit<Group, "createdAt" | "updatedAt"> & Partial<Group>): Promise<Group> => {
+  const now = Date.now();
+  const item: Group = { createdAt: now, ...g, updatedAt: now } as Group;
+  data = { ...data, groups: upsert(data.groups, item) };
+  emit(true);
+  await db.put("groups", item);
+  return item;
+};
+
+export const deleteGroup = async (id: string): Promise<void> => {
+  const g = data.groups.find((x) => x.id === id);
+  if (!g) return;
+  const item = { ...g, deleted: true, updatedAt: Date.now() };
+  // 人の所属からも外す
+  const touched = data.persons.filter((p) => p.groups.includes(id)).map((p) => ({ ...p, groups: p.groups.filter((x) => x !== id), updatedAt: Date.now() }));
+  let persons = data.persons;
+  for (const p of touched) persons = upsert(persons, p);
+  data = { ...data, groups: upsert(data.groups, item), persons };
+  emit(true);
+  await Promise.all([db.put("groups", item), db.putMany("persons", touched)]);
+};
+
+/** まとめて所属を付け外しする */
+export const setGroupMembers = async (groupId: string, memberIds: string[]): Promise<void> => {
+  const now = Date.now();
+  const changed: Person[] = [];
+  for (const p of data.persons) {
+    const has = p.groups.includes(groupId);
+    const want = memberIds.includes(p.id);
+    if (has !== want) changed.push({ ...p, groups: want ? [...p.groups, groupId] : p.groups.filter((x) => x !== groupId), updatedAt: now });
+  }
+  let persons = data.persons;
+  for (const p of changed) persons = upsert(persons, p);
+  data = { ...data, persons };
+  emit(true);
+  await db.putMany("persons", changed);
+};
+
 // -------------------------------------------------------------------- 画像
 
 export const addImage = async (blob: Blob): Promise<string> => {
@@ -160,13 +201,14 @@ export const setImageDriveId = async (id: string, driveId: string): Promise<void
 
 /** 同期や読み込みで得た全データに置き換える */
 export const replaceAll = async (next: AppData, local: boolean): Promise<void> => {
-  data = { ...next, persons: next.persons.map(normalizePerson) };
+  data = { ...next, persons: next.persons.map(normalizePerson), groups: next.groups ?? [] };
   emit(local);
   await Promise.all([
     db.putMany("persons", data.persons),
     db.putMany("relations", data.relations),
     db.putMany("logs", data.logs),
     db.putMany("images", data.images),
+    db.putMany("groups", data.groups),
   ]);
 };
 

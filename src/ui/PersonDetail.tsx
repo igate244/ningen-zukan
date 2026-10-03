@@ -4,12 +4,13 @@ import { type ReactNode, useMemo, useState } from "react";
 import { age, daysToBirthday, formatDate, formatMonthDay, sinceLabel, today } from "../dates";
 import {
   CATEGORY_LABEL, type CheckItem, type Favor, GENDER_LABEL, LOG_KIND_LABEL, type Person, RELATION_CHOICES, type RelType,
-  newId, type Relation, relationLabelFrom, selfLabel,
+  newId, type Mood, MOODS, MOOD_LABEL, type Relation, relationLabelFrom, selfLabel,
 } from "../model";
 import { navigate } from "../router";
 import { alive, deleteRelation, lastMetMap, saveRelation, savePerson, useData } from "../store";
 import { Avatar, Field, Icon, PersonPicker, TopBar } from "./common";
 import { GraphView } from "./GraphView";
+import { RelationRadar } from "./Radar";
 import { buildCombined } from "../graph";
 import {
   childLabel, childrenOf, exSpousesOf, familyIndex, kinLabel, parentLabel, parentsOf, siblingLabel, siblingsOf,
@@ -77,6 +78,12 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
           <div className="badges">
             {!person.isSelf && <span className="badge accent">{CATEGORY_LABEL[person.category]}</span>}
             {person.gender && <span className="badge">{GENDER_LABEL[person.gender]}</span>}
+            {person.groups.map((gid) => {
+              const g = (data.groups ?? []).find((x) => x.id === gid && !x.deleted);
+              return g ? (
+                <button type="button" className="badge accent link" key={gid} onClick={() => navigate(`/g/${gid}`)}>{g.name}</button>
+              ) : null;
+            })}
             {person.tags.map((t) => (
               <span className="badge" key={t}>#{t}</span>
             ))}
@@ -124,6 +131,12 @@ const InfoTab = ({ person: p }: { person: Person }) => {
 
   return (
     <>
+      {!p.isSelf && (
+        <div className="section">
+          <div className="section-title">自分との関係</div>
+          <RelationRadar person={p} />
+        </div>
+      )}
       <FamilySection person={p} />
       <div className="section">
         <KV
@@ -482,7 +495,7 @@ const LinksTab = ({ person }: { person: Person }) => {
                   <Avatar person={other} size={36} />
                   <div className="row-main">
                     <div className="row-name">{other.isSelf ? "自分" : other.name}</div>
-                    <div className="row-sub">{(r.labelBy === person.id ? r.label : undefined) ?? kinLabel(fx, person.id, other.id) ?? relationLabelFrom(r, person.id)}{r.note ? ` ・ ${r.note}` : ""}</div>
+                    <div className="row-sub">{(r.labelBy === person.id ? r.label : undefined) ?? kinLabel(fx, person.id, other.id) ?? relationLabelFrom(r, person.id)}{r.mood && r.mood !== "normal" ? ` ・ ${MOOD_LABEL[r.mood]}` : ""}{r.note ? ` ・ ${r.note}` : ""}</div>
                   </div>
                 </button>
                 <button type="button" className="icon-btn" aria-label="つながりを編集" onClick={() => setEditing(r)}>
@@ -527,13 +540,14 @@ const RelationEditSheet = ({ rel, viewerId, onClose }: { rel: Relation; viewerId
   const [choice, setChoice] = useState(choiceOf(rel, viewerId));
   const [label, setLabel] = useState(rel.labelBy === viewerId ? (rel.label ?? "") : "");
   const [note, setNote] = useState(rel.note ?? "");
+  const [mood, setMood] = useState<Mood | undefined>(rel.mood);
   const [picking, setPicking] = useState(false);
   const other = data.persons.find((p) => p.id === otherId);
 
   const save = async (): Promise<void> => {
     const c = RELATION_CHOICES.find((x) => x.key === choice) ?? RELATION_CHOICES[0];
     const [a, b] = c.otherIsA ? [otherId, viewerId] : [viewerId, otherId];
-    await saveRelation({ ...rel, a, b, type: c.type, label: label.trim() || undefined, labelBy: label.trim() ? viewerId : undefined, note: note.trim() || undefined });
+    await saveRelation({ ...rel, a, b, type: c.type, label: label.trim() || undefined, labelBy: label.trim() ? viewerId : undefined, note: note.trim() || undefined, mood });
     onClose();
   };
   const remove = async (): Promise<void> => {
@@ -566,6 +580,15 @@ const RelationEditSheet = ({ rel, viewerId, onClose }: { rel: Relation; viewerId
                 {RELATION_CHOICES.map((c) => (
                   <button type="button" key={c.key} className={`chip ${choice === c.key ? "on" : ""}`} onClick={() => setChoice(c.key)}>
                     {c.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="関係の温度">
+              <div className="chips" style={{ paddingTop: 0, flexWrap: "wrap" }}>
+                {MOODS.map((m) => (
+                  <button type="button" key={m} className={`chip mood-${m} ${mood === m ? "on" : ""}`} onClick={() => setMood(mood === m ? undefined : m)}>
+                    {MOOD_LABEL[m]}
                   </button>
                 ))}
               </div>

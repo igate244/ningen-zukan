@@ -1,9 +1,9 @@
 // src/db.ts — 端末内保存（IndexedDB）。ライブラリを使わない最小限のラッパ。
 
 const DB_NAME = "ningen-zukan";
-const DB_VERSION = 1;
+const DB_VERSION = 2; // v2: groups を追加
 
-export const STORES = ["persons", "relations", "logs", "images", "blobs", "meta"] as const;
+export const STORES = ["persons", "relations", "logs", "images", "groups", "blobs", "meta"] as const;
 export type StoreName = (typeof STORES)[number];
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -20,7 +20,14 @@ const open = (): Promise<IDBDatabase> => {
         }
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      // 別タブなどで新しい版が開かれたら、こちらは閉じて道を譲る
+      req.result.onversionchange = () => {
+        req.result.close();
+        dbPromise = null;
+      };
+      resolve(req.result);
+    };
     req.onerror = () => reject(req.error);
   });
   return dbPromise;

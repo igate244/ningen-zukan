@@ -76,6 +76,8 @@ export interface Person extends Base {
   nickname?: string;
   category: Category;
   tags: string[];
+  /** 所属しているグループの ID */
+  groups: string[];
   /** 画像 ID（images テーブル） */
   photo?: string;
   /** 写真が無いときのアイコンの文字（未設定なら名前の 1 文字目） */
@@ -137,7 +139,13 @@ export interface Relation extends Base {
   label?: string;
   labelBy?: string;
   note?: string;
+  /** 関係の温度 */
+  mood?: Mood;
 }
+
+export const MOODS = ["close", "normal", "cool", "bad"] as const;
+export type Mood = (typeof MOODS)[number];
+export const MOOD_LABEL: Record<Mood, string> = { close: "仲良し", normal: "ふつう", cool: "微妙", bad: "険悪" };
 
 /** ある人から見た相手の呼び名 */
 export const relationLabelFrom = (rel: Relation, viewerId: string): string => {
@@ -207,11 +215,27 @@ export interface ImageMeta extends Base {
   mime: string;
 }
 
+export const GROUP_KINDS = ["school", "work", "hobby", "local", "family", "other"] as const;
+export type GroupKind = (typeof GROUP_KINDS)[number];
+export const GROUP_KIND_LABEL: Record<GroupKind, string> = {
+  school: "学校", work: "職場", hobby: "趣味", local: "地元・近所", family: "親戚", other: "その他",
+};
+
+/** 同期・クラス・部署・サークルなどのまとまり。人は Person.groups で所属する */
+export interface Group extends Base {
+  name: string;
+  kind: GroupKind;
+  /** いつ頃の仲間か（例: 2004〜2010） */
+  period?: string;
+  note?: string;
+}
+
 export interface AppData {
   persons: Person[];
   relations: Relation[];
   logs: LogEntry[];
   images: ImageMeta[];
+  groups: Group[];
 }
 
 export const SELF_ID = "me";
@@ -228,6 +252,7 @@ export const emptyPerson = (name = ""): Person => {
     name,
     category: "work",
     tags: [],
+    groups: [],
     careers: [],
     work: {},
     nextTopics: [],
@@ -240,6 +265,7 @@ export const normalizePerson = (raw: Partial<Person> & { id: string }): Person =
   ...emptyPerson(),
   ...raw,
   tags: Array.isArray(raw.tags) ? raw.tags : [],
+  groups: Array.isArray(raw.groups) ? raw.groups : [],
   careers: Array.isArray(raw.careers) ? raw.careers : [],
   work: raw.work ?? {},
   nextTopics: Array.isArray(raw.nextTopics) ? raw.nextTopics : [],
