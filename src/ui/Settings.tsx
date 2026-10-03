@@ -1,0 +1,188 @@
+// src/ui/Settings.tsx — ドライブ連携・書き出し / 読み込み・MYME からの取り込み
+
+import { useState } from "react";
+import { isConfigured } from "../drive";
+import { type AppData, type Category, CATEGORIES, type Person, SELF_ID, emptyPerson } from "../model";
+import { navigate } from "../router";
+import { alive, getData, replaceAll, useData } from "../store";
+import { connect, disconnect, mergeData, reconnect, syncNow, useSyncState } from "../sync";
+import { Icon } from "./common";
+
+declare const __APP_VERSION__: string;
+
+const download = (name: string, text: string): void => {
+  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+const stamp = (): string => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+
+/** MYME のバックアップ JSON から人物を取り込む（同じ名前の人がいれば飛ばす） */
+const importFromMyme = (json: Record<string, unknown>): { added: number; skipped: number } => {
+  const existing = new Set(alive(getData().persons).map((p) => p.name.replace(/\s/g, "")));
+  const out: Person[] = [];
+  let skipped = 0;
+  const push = (name: string, build: (p: Person) => Person): void => {
+    const key = name.replace(/\s/g, "");
+    if (!key || existing.has(key)) {
+      skipped++;
+      return;
+    }
+    existing.add(key);
+    out.push(build(emptyPerson(name.trim())));
+  };
+  const toBirth = (b?: unknown): Pick<Person, "birthDate" | "birthYearUnknown"> => {
+    if (typeof b !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(b)) return {};
+    // MYME は生まれ年不明を 1000 年で保存している
+    return b.startsWith("1000-") ? { birthDate: `2000${b.slice(4, 10)}`, birthYearUnknown: true } : { birthDate: b.slice(0, 10) };
+  };
+
+  for (const c of (json.companions as Array<Record<string, unknown>>) ?? []) {
+    if (!c || typeof c.name !== "string") continue;
+    const cat = (CATEGORIES as readonly string[]).includes(String(c.category)) ? (c.category as Category) : "other";
+    push(c.name, (p) => ({
+      ...p,
+      category: cat,
+      ...toBirth(c.birthDate ?? c.birthday),
+      note: [c.relation, c.note ?? c.description].filter((x) => typeof x === "string" && x).join("\n") || undefined,
+      learnings: typeof c.learnings === "string" ? c.learnings : undefined,
+      tags: ["MYMEから"],
+    }));
+  }
+  for (const f of (json.familyMembers as Array<Record<string, unknown>>) ?? []) {
+    if (!f || typeof f.name !== "string") continue;
+    push(f.name, (p) => ({ ...p, category: "family", ...toBirth(f.birthDate), tags: ["MYMEから"] }));
+  }
+  const d = getData();
+  void replaceAll({ ...d, persons: [...d.persons, ...out] }, true);
+  return { added: out.length, skipped };
+};
+
+export const SettingsPage = () => {
+  const data = useData();
+  const sync = useSyncState();
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (fn: () => Promise<void>): Promise<void> => {
+    try {
+      setBusy(true);
+      setMsg(null);
+      await fn();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onImport = async (file?: File): Promise<void> => {
+    if (!file) return;
+    await run(async () => {
+      const json = JSON.parse(await file.text()) as Record<string, unknown>;
+      if (Array.isArray(json.companions) || Array.isArray(json.familyMembers)) {
+        const r = importFromMyme(json);
+        setMsg(`MYME から ${r.added}人 取り込みました${r.skipped ? `（同名の ${r.skipped}人 は飛ばしました）` : ""}`);
+      } else if (Array.isArray(json.persons)) {
+        const merged = mergeData(getData(), json as unknown as AppData);
+        await replaceAll(merged, true);
+        setMsg("読み込みました（新しい方の内容で合体）");
+      } else {
+        setMsg("このファイルは読み込めない形式でした");
+      }
+    });
+  };
+
+  const persons = alive(data.persons).filter((p) => !p.isSelf).length;
+  const logs = alive(data.logs).length;
+  const lastSync = sync.lastSync ? new Date(sync.lastSync).toLocaleString("ja-JP") : "まだ";
+
+  return (
+    <>
+      <div className="section">
+        <div className="section-title">Google ドライブ</div>
+        <div className="card fieldset">
+          {!isConfigured() ? (
+            <div className="small muted">
+              ドライブ連携はまだ準備中です（開発側の設定待ち）。今はこの端末の中だけに保存されています。
+            </div>
+          ) : sync.status === "off" ? (
+            <>
+              <div className="small">
+                つなぐと、データが<strong>自分の Google ドライブ</strong>の「人間図鑑」フォルダに保存されます。
+                アプリの作者を含め、他の人には見えません。スマホと PC など複数の端末で同じデータを使えます。
+              </div>
+              <button type="button" className="btn primary" disabled={busy} onClick={() => void run(connect)}>
+                Google ドライブにつなぐ
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="small">
+                状態：
+                {sync.status === "syncing" ? "同期中…" : sync.status === "needAuth" ? "再接続が必要" : sync.status === "error" ? "エラー" : "つながっています"}
+                <br />
+                最後の同期：{lastSync}
+                {sync.message && <div className="error">{sync.message}</div>}
+              </div>
+              <div className="actions" style={{ marginTop: 0 }}>
+                {sync.status === "needAuth" ? (
+                  <button type="button" className="btn primary" disabled={busy} onClick={() => void run(reconnect)}>再接続</button>
+                ) : (
+                  <button type="button" className="btn" disabled={busy || sync.status === "syncing"} onClick={() => void run(syncNow)}>
+                    <Icon name="sync" size={16} /> 今すぐ同期
+                  </button>
+                )}
+                <button type="button" className="btn" disabled={busy}
+                  onClick={() => window.confirm("ドライブとの連携を外しますか？（端末とドライブのデータはどちらも残ります）") && void run(disconnect)}>
+                  連携を外す
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="section-title">自分</div>
+        <div className="list card">
+          <button type="button" className="row" onClick={() => navigate(`/p/${SELF_ID}`)}>
+            <div className="row-main">
+              <div className="row-name">自分のページ</div>
+              <div className="row-sub">家族や上司とのつながりの起点になります</div>
+            </div>
+            <Icon name="chevron" size={18} />
+          </button>
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="section-title">データ</div>
+        <div className="card fieldset">
+          <div className="small muted">登録 {persons}人 ・ 記録 {logs}件</div>
+          <button type="button" className="btn" onClick={() => download(`ningen-zukan_${stamp()}.json`, JSON.stringify({ app: "ningen-zukan", version: 1, ...getData() }, null, 1))}>
+            書き出し（JSON・写真は含まない）
+          </button>
+          <label className="btn" style={{ cursor: "pointer" }}>
+            読み込み（この図鑑の JSON / MYME のバックアップ）
+            <input type="file" accept="application/json,.json" hidden onChange={(e) => { void onImport(e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
+          {msg && <div className="small" style={{ color: "var(--accent)" }}>{msg}</div>}
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="section-title">このアプリについて</div>
+        <div className="card fieldset small muted">
+          人間図鑑 ・ 版 {__APP_VERSION__}
+          <br />
+          サーバーを持たないアプリです。データは端末の中と、つないだ場合は自分の Google ドライブにだけ保存されます。
+        </div>
+      </div>
+    </>
+  );
+};
