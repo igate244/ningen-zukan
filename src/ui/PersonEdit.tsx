@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { shrinkImage } from "../image";
-import { CATEGORIES, CATEGORY_LABEL, type Career, type Category, GENDERS, GENDER_LABEL, type Person, type WorkManual, emptyPerson, newId } from "../model";
+import { CATEGORIES, CATEGORY_LABEL, type Career, type Category, GENDERS, GENDER_LABEL, type Person, type WorkManual, emptyPerson, iconCharOf, joinName, newId, splitName } from "../model";
 import { goBack, navigate } from "../router";
 import { addImage, deletePerson, getData, savePerson } from "../store";
 import { Avatar, Field, Icon, TopBar } from "./common";
@@ -21,7 +21,16 @@ const clean = (s?: string): string | undefined => (s && s.trim() ? s.trim() : un
 
 export const PersonEdit = ({ id }: { id?: string }) => {
   const original = id ? getData().persons.find((p) => p.id === id) : undefined;
-  const [p, setP] = useState<Person>(() => original ?? emptyPerson());
+  const [p, setP] = useState<Person>(() => {
+    const base = original ?? emptyPerson();
+    // 姓・名が未設定の古いデータは、名前の空白で分けて入れておく
+    if (base.familyName === undefined && base.givenName === undefined && base.name) {
+      const sp = splitName(base.name);
+      const kp = splitName(base.kana ?? "");
+      return { ...base, familyName: sp.family, givenName: sp.given, familyKana: kp.family, givenKana: kp.given };
+    }
+    return base;
+  });
   const [tagText, setTagText] = useState((original?.tags ?? []).join("、"));
   const [open, setOpen] = useState<Record<string, boolean>>({
     work: !!original && (original.category === "work" || !!original.org),
@@ -53,16 +62,21 @@ export const PersonEdit = ({ id }: { id?: string }) => {
   };
 
   const onSave = async (): Promise<void> => {
-    if (!p.name.trim()) {
-      setError("名前を入れてください");
+    const fullName = joinName(p.familyName, p.givenName);
+    if (!fullName) {
+      setError("姓か名を入れてください");
       return;
     }
     const tags = [...new Set(tagText.split(/[、,，\s#]+/).map((t) => t.trim()).filter(Boolean))];
     const work: WorkManual = Object.fromEntries(Object.entries(p.work).map(([k, v]) => [k, clean(v)]).filter(([, v]) => v));
     const saved = await savePerson({
       ...p,
-      name: p.name.trim(),
-      kana: clean(p.kana),
+      name: fullName,
+      familyName: clean(p.familyName),
+      givenName: clean(p.givenName),
+      familyKana: clean(p.familyKana),
+      givenKana: clean(p.givenKana),
+      kana: joinName(p.familyKana, p.givenKana) || undefined,
       // 日本語入力の途中で切らないよう、入力中はそのまま持ち、保存時に 1 文字にする
       iconChar: clean(p.iconChar) ? [...clean(p.iconChar)!][0] : undefined,
       tags,
@@ -104,7 +118,7 @@ export const PersonEdit = ({ id }: { id?: string }) => {
       <main className="main">
         <div className="form">
           <div className="photo-pick">
-            <Avatar person={p} size={88} />
+            <Avatar person={{ ...p, name: joinName(p.familyName, p.givenName) || p.name }} size={88} />
             <label>
               {p.photo ? "写真を変える" : "写真を追加"}
               <input type="file" accept="image/*" hidden onChange={(e) => void onPhoto(e.target.files?.[0])} />
@@ -118,24 +132,32 @@ export const PersonEdit = ({ id }: { id?: string }) => {
               <label className="check-inline" style={{ cursor: "default" }}>
                 アイコンの文字
                 <input className="input" style={{ width: 56, textAlign: "center", padding: "6px 4px" }} value={p.iconChar ?? ""}
-                  placeholder={[...(p.name.trim() || "?")][0]}
+                  placeholder={iconCharOf({ name: joinName(p.familyName, p.givenName), givenName: p.givenName })}
                   onChange={(e) => set("iconChar", e.target.value || undefined)} />
               </label>
             )}
           </div>
 
           <div className="card fieldset">
-            <Field label="名前（必須）">
-              <Text value={p.name} onChange={(v) => set("name", v)} placeholder="山田 太郎" />
-            </Field>
             <div className="two">
-              <Field label="よみがな">
-                <Text value={p.kana} onChange={(v) => set("kana", v)} placeholder="やまだ たろう" />
+              <Field label="姓">
+                <Text value={p.familyName} onChange={(v) => set("familyName", v)} placeholder="山田" />
               </Field>
-              <Field label="呼び名">
-                <Text value={p.nickname} onChange={(v) => set("nickname", v)} />
+              <Field label="名">
+                <Text value={p.givenName} onChange={(v) => set("givenName", v)} placeholder="太郎" />
               </Field>
             </div>
+            <div className="two">
+              <Field label="せい">
+                <Text value={p.familyKana} onChange={(v) => set("familyKana", v)} placeholder="やまだ" />
+              </Field>
+              <Field label="めい">
+                <Text value={p.givenKana} onChange={(v) => set("givenKana", v)} placeholder="たろう" />
+              </Field>
+            </div>
+            <Field label="呼び名">
+              <Text value={p.nickname} onChange={(v) => set("nickname", v)} placeholder="みーちゃん など" />
+            </Field>
             <Field label="性別">
               <div className="chips" style={{ paddingTop: 0, flexWrap: "wrap" }}>
                 {GENDERS.map((g) => (

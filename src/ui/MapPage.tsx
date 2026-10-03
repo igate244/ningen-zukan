@@ -1,7 +1,7 @@
 // src/ui/MapPage.tsx — 相関図・家系図の画面
 
-import { useMemo, useState } from "react";
-import { buildFamily, buildRadial } from "../graph";
+import { useEffect, useMemo, useState } from "react";
+import { buildCombined, buildFamily } from "../graph";
 import { SELF_ID, selfLabel } from "../model";
 import { navigate, useRoute } from "../router";
 import { alive, useData } from "../store";
@@ -24,6 +24,10 @@ export const MapPage = () => {
   const [center, setCenterState] = useState(memo.center);
   const [mode, setModeState] = useState<Mode>((query.get("m") as Mode) || memo.mode);
   const [depth, setDepthState] = useState<1 | 2>(memo.depth);
+  // 同じ画面のまま別の人の「相関図」ボタンから来たときも中心を切り替える
+  useEffect(() => {
+    if (qc) setCenterState(qc);
+  }, [qc]);
 
   const setCenter = (id: string): void => {
     memo.center = id;
@@ -42,7 +46,7 @@ export const MapPage = () => {
   const person = data.persons.find((p) => p.id === center && !p.deleted) ?? data.persons.find((p) => p.id === SELF_ID);
   const centerId = person?.id ?? SELF_ID;
   const graph = useMemo(
-    () => (mode === "family" ? buildFamily(data, centerId) : buildRadial(data, centerId, depth)),
+    () => (mode === "family" ? buildFamily(data, centerId) : buildCombined(data, centerId, depth)),
     [data, centerId, mode, depth],
   );
   const relCount = useMemo(() => alive(data.relations).length, [data.relations]);
@@ -76,7 +80,7 @@ export const MapPage = () => {
       {mode === "family" && (
         <div className="map-sub">
           <GraphLegend family />
-          <span className="small muted">親子・夫婦・兄弟から自動で並べます</span>
+          <span className="small muted">上が上の世代・きょうだいは左が年上</span>
         </div>
       )}
 

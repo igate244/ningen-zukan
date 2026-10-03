@@ -10,7 +10,7 @@ import { navigate } from "../router";
 import { alive, deleteRelation, lastMetMap, saveRelation, savePerson, useData } from "../store";
 import { Avatar, Icon, PersonPicker, TopBar } from "./common";
 import { GraphView } from "./GraphView";
-import { buildRadial } from "../graph";
+import { buildCombined } from "../graph";
 import {
   childLabel, childrenOf, exSpousesOf, familyIndex, kinLabel, parentLabel, parentsOf, siblingLabel, siblingsOf,
   spouseLabel, spousesOf,
@@ -430,7 +430,7 @@ const LinksTab = ({ person }: { person: Person }) => {
     [data.relations, person.id],
   );
   const byId = useMemo(() => new Map(data.persons.filter((p) => !p.deleted).map((p) => [p.id, p])), [data.persons]);
-  const mini = useMemo(() => buildRadial(data, person.id, 1), [data, person.id]);
+  const mini = useMemo(() => buildCombined(data, person.id, 1), [data, person.id]);
   const fx = useMemo(() => familyIndex(data), [data]);
 
   const add = (otherId: string): void => {

@@ -44,7 +44,7 @@ const colorFor = (id: string): string => {
   return COLORS[h % COLORS.length];
 };
 
-export const Avatar = ({ person, size = 40 }: { person?: Pick<Person, "id" | "name" | "photo" | "iconChar">; size?: number }) => {
+export const Avatar = ({ person, size = 40 }: { person?: Pick<Person, "id" | "name" | "photo" | "iconChar" | "givenName">; size?: number }) => {
   const url = useImageUrl(person?.photo);
   const initial = iconCharOf(person);
   return (

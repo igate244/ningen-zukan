@@ -66,8 +66,13 @@ export type Gender = (typeof GENDERS)[number];
 export const GENDER_LABEL: Record<Gender, string> = { male: "男性", female: "女性", other: "その他" };
 
 export interface Person extends Base {
+  /** 表示名（姓と名から自動で作る。姓・名が無い古いデータはこれだけ） */
   name: string;
+  familyName?: string;
+  givenName?: string;
   kana?: string;
+  familyKana?: string;
+  givenKana?: string;
   nickname?: string;
   category: Category;
   tags: string[];
@@ -244,6 +249,19 @@ export const normalizePerson = (raw: Partial<Person> & { id: string }): Person =
 export const selfLabel = (p: Pick<Person, "name" | "isSelf">): string =>
   p.isSelf ? (p.name && p.name !== "自分" ? `${p.name}（自分）` : "自分") : p.name;
 
-/** アイコンに出す 1 文字 */
-export const iconCharOf = (p?: Pick<Person, "name" | "iconChar">): string =>
-  (p?.iconChar && [...p.iconChar.trim()][0]) || [...(p?.name?.trim() ?? "?")][0] || "?";
+/** アイコンに出す 1 文字（指定がなければ名の 1 文字目。家族で姓が同じでも見分けられるように） */
+export const iconCharOf = (p?: Pick<Person, "name" | "iconChar" | "givenName">): string =>
+  (p?.iconChar && [...p.iconChar.trim()][0]) ||
+  (p?.givenName && [...p.givenName.trim()][0]) ||
+  [...(splitName(p?.name ?? "").given ?? "?")][0] ||
+  "?";
+
+/** 「山田 太郎」「山田　太郎」を姓と名に分ける（空白が無ければ全部を名に） */
+export const splitName = (full: string): { family?: string; given?: string } => {
+  const parts = full.trim().split(/[\s\u3000]+/).filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return { given: parts[0] };
+  return { family: parts[0], given: parts.slice(1).join(" ") };
+};
+
+export const joinName = (family?: string, given?: string): string => [family?.trim(), given?.trim()].filter(Boolean).join(" ");

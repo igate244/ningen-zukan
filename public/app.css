@@ -282,3 +282,5 @@ a { color: var(--accent); }
 .birthday-banner { background: var(--accent-soft); border-color: transparent; }
 .birthday-line { display: block; border: none; background: transparent; padding: 2px 0; text-align: left; font-size: 14px; }
 .graph-legend i.dot { background: repeating-linear-gradient(90deg, var(--edge-family) 0 2px, transparent 2px 6px); }
+.graph-legend i.dbl { height: 6px; background: none; border-top: 2px solid var(--edge-family); border-bottom: 2px solid var(--edge-family); border-radius: 0; }
+.graph-legend b.x { position: absolute; left: 3px; top: -7px; font-size: 11px; color: var(--danger); }

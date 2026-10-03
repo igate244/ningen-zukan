@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { isConfigured } from "../drive";
-import { type AppData, type Category, CATEGORIES, type Person, type Relation, SELF_ID, emptyPerson, newId } from "../model";
+import { type AppData, type Category, CATEGORIES, type Person, type Relation, SELF_ID, emptyPerson, newId, splitName } from "../model";
 import { navigate } from "../router";
 import { alive, getData, replaceAll, useData } from "../store";
 import { disablePush, enablePush, testPush, usePushState } from "../push";
@@ -36,7 +36,8 @@ const importFromMyme = (json: Record<string, unknown>): { added: number; skipped
       return null;
     }
     existing.add(key);
-    const p = build(emptyPerson(name.trim()));
+    const sp = splitName(name);
+    const p = build({ ...emptyPerson(name.trim()), familyName: sp.family, givenName: sp.given });
     out.push(p);
     return p;
   };

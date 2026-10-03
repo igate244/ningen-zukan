@@ -1,9 +1,9 @@
 {
-  "id": "/ningen-zukan/app",
+  "id": "/ningen-zukan/app/",
   "name": "人間図鑑",
   "short_name": "人間図鑑",
   "description": "人間関係を記録・整理・向上させる個人用アプリ",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f7f7f5",

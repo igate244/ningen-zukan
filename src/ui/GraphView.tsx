@@ -150,6 +150,24 @@ export const GraphView = ({
         <g transform={`translate(${size.w / 2 + view.x},${size.h / 2 + view.y}) scale(${view.k})`}>
           {graph.edges.map((e) => {
             const st = EDGE_STYLE[e.kind];
+            // 夫婦・元夫婦は横の二重線（家系図の決まり）。元夫婦は真ん中に×
+            if (e.kind === "spouse" || e.kind === "exspouse") {
+              const [[x1, y1], [x2, y2]] = e.points;
+              const mx = (x1 + x2) / 2;
+              const my = (y1 + y2) / 2;
+              return (
+                <g key={e.id} opacity={e.faint ? 0.22 : 1}>
+                  <line x1={x1} y1={y1 - 3} x2={x2} y2={y2 - 3} stroke={st.color} strokeWidth={2} />
+                  <line x1={x1} y1={y1 + 3} x2={x2} y2={y2 + 3} stroke={st.color} strokeWidth={2} />
+                  {e.kind === "exspouse" && (
+                    <>
+                      <line x1={mx - 7} y1={my - 9} x2={mx + 7} y2={my + 9} stroke="var(--danger)" strokeWidth={2.5} strokeLinecap="round" />
+                      <line x1={mx + 7} y1={my - 9} x2={mx - 7} y2={my + 9} stroke="var(--danger)" strokeWidth={2.5} strokeLinecap="round" />
+                    </>
+                  )}
+                </g>
+              );
+            }
             return (
               <polyline
                 key={e.id}
@@ -162,14 +180,6 @@ export const GraphView = ({
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
-            );
-          })}
-          {graph.edges.filter((e) => e.kind === "exspouse").map((e) => {
-            const [[x1, y1], [x2, y2]] = e.points;
-            return (
-              <text key={`${e.id}-x`} x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6} textAnchor="middle" className="g-sub" fontSize={10}>
-                離婚
-              </text>
             );
           })}
           {graph.nodes.map((n) => (
@@ -188,8 +198,9 @@ export const GraphView = ({
 
 export const GraphLegend = ({ family }: { family?: boolean }) => (
   <div className="graph-legend">
-    <span><i style={{ background: "var(--edge-family)" }} />家族・親族</span>
-    <span><i className="dot" />元夫婦</span>
+    <span><i style={{ background: "var(--edge-family)" }} />親子・家族</span>
+    <span><i className="dbl" />夫婦</span>
+    <span><i className="dbl" style={{ position: "relative" }}><b className="x">×</b></i>離婚</span>
     {!family && (
       <>
         <span><i style={{ background: "var(--edge-work)" }} />仕事</span>
