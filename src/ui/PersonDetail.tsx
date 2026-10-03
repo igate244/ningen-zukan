@@ -11,7 +11,6 @@ import { alive, deleteRelation, lastMetMap, saveRelation, savePerson, useData } 
 import { Avatar, Field, Icon, PersonPicker, TopBar } from "./common";
 import { GraphView } from "./GraphView";
 import { RelationRadar } from "./Radar";
-import { FeelingMeter } from "./Feeling";
 import { IMPRESSION_ICON, IMPRESSION_LABEL } from "../model";
 import { buildCombined } from "../graph";
 import {
@@ -102,9 +101,8 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
 
         {!person.isSelf && (
           <>
-            <FeelingMeter person={person} keys={["like", "trust"]} onChange={(patch) => void savePerson({ ...person, ...patch })} />
             {recentImpressions.length > 0 && (
-              <div className="feel-recent" style={{ margin: "0 14px" }}>
+              <div className="feel-recent" style={{ justifyContent: "center", borderTop: "none" }}>
                 最近の印象
                 {recentImpressions.map((l) => (
                   <span key={l.id} className="i" title={`${l.date} ${IMPRESSION_LABEL[l.impression!]}`}>{IMPRESSION_ICON[l.impression!]}</span>
