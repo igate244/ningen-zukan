@@ -1,7 +1,7 @@
 // sw.js — オフラインでも開けるようにする最小限のサービスワーカー
 // 方針: 自分のファイルは「まずネット、だめならキャッシュ」。Google との通信には触らない。
 const CACHE = "ningen-zukan-__VERSION__";
-const CORE = ["./", "./index.html", "./app.js", "./app.css", "./manifest.webmanifest", "./icon.svg", "./icon-192.png"];
+const CORE = ["./", "./index.html", "./app.js", "./app.css", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-maskable-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()));
