@@ -11,6 +11,8 @@ import { alive, deleteRelation, lastMetMap, saveRelation, savePerson, useData } 
 import { Avatar, Field, Icon, PersonPicker, TopBar } from "./common";
 import { GraphView } from "./GraphView";
 import { RelationRadar } from "./Radar";
+import { FeelingMeter } from "./Feeling";
+import { IMPRESSION_ICON, IMPRESSION_LABEL } from "../model";
 import { buildCombined } from "../graph";
 import {
   childLabel, childrenOf, exSpousesOf, familyIndex, kinLabel, parentLabel, parentsOf, siblingLabel, siblingsOf,
@@ -46,6 +48,12 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
   };
 
   const lastMet = useMemo(() => lastMetMap(data).get(id), [data, id]);
+  // この人との記録に付けた印象（新しい順に 8 件、左が古い）
+  const recentImpressions = useMemo(
+    () => alive(data.logs).filter((l) => l.impression && l.personIds.includes(id))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt).slice(0, 8).reverse(),
+    [data.logs, id],
+  );
 
   if (!person) {
     return (
@@ -91,6 +99,20 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
             {lastMet && <span className="badge">最後の記録 {sinceLabel(lastMet)}</span>}
           </div>
         </div>
+
+        {!person.isSelf && (
+          <>
+            <FeelingMeter like={person.like} trust={person.trust} onChange={(patch) => void savePerson({ ...person, ...patch })} />
+            {recentImpressions.length > 0 && (
+              <div className="feel-recent" style={{ margin: "0 14px" }}>
+                最近の印象
+                {recentImpressions.map((l) => (
+                  <span key={l.id} className="i" title={`${l.date} ${IMPRESSION_LABEL[l.impression!]}`}>{IMPRESSION_ICON[l.impression!]}</span>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
         <div className="actions">
           <button type="button" className="btn primary" onClick={() => navigate(`/log/new?p=${id}`)}>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatDate, today } from "../dates";
-import { LOG_KINDS, LOG_KIND_LABEL, type LogEntry, type LogKind, newId } from "../model";
+import { IMPRESSIONS, IMPRESSION_ICON, IMPRESSION_LABEL, LOG_KINDS, LOG_KIND_LABEL, type LogEntry, type LogKind, newId } from "../model";
 import { goBack, navigate } from "../router";
 import { alive, deleteLog, getData, saveLog, useData } from "../store";
 import { Avatar, Field, Icon, PersonPicker, TopBar } from "./common";
@@ -51,6 +51,7 @@ export const LogsPage = () => {
                   <div className="log-head">
                     <span>{formatDate(l.date).replace(/^\d+年/, "")}</span>
                     <span className="log-kind">{LOG_KIND_LABEL[l.kind]}</span>
+                    {l.impression && <span title={IMPRESSION_LABEL[l.impression]}>{IMPRESSION_ICON[l.impression]}</span>}
                   </div>
                   <div className="log-people">
                     {l.personIds.map((id) => {
@@ -149,6 +150,19 @@ export const LogEdit = ({ id, presetPersonId, presetDate, presetKind }: { id?: s
           <Field label="いつ">
             <input className="input" type="date" value={log.date} onChange={(e) => setLog({ ...log, date: e.target.value || today() })} />
           </Field>
+
+          {log.kind !== "event" && (
+            <Field label="印象は？（任意）">
+              <div className="chips" style={{ paddingTop: 0 }}>
+                {IMPRESSIONS.map((im) => (
+                  <button type="button" key={im} className={`chip ${log.impression === im ? "on" : ""}`}
+                    onClick={() => setLog({ ...log, impression: log.impression === im ? undefined : im })}>
+                    {IMPRESSION_ICON[im]} {IMPRESSION_LABEL[im]}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
 
           {log.kind === "event" && (
             <label className="check-inline">

@@ -19,6 +19,7 @@ import { goBack, navigate } from "../router";
 import { addImage, alive, deletePerson, getData, savePerson, useData } from "../store";
 import { Avatar, Icon, TopBar } from "./common";
 import { GroupEditSheet } from "./Groups";
+import { FeelingMeter } from "./Feeling";
 
 const clean = (s?: string): string | undefined => (s && s.trim() ? s.trim() : undefined);
 
@@ -350,6 +351,13 @@ export const PersonEdit = ({ id }: { id?: string }) => {
             </label>
           )}
         </Group>
+
+        {/* ---- 自分からの気持ち */}
+        {!p.isSelf && (
+          <Group title="自分からの気持ち" footer="この欄は自分だけが見るもの。タップで選び、もう一度タップで解除">
+            <FeelingMeter like={p.like} trust={p.trust} onChange={(patch) => setP((cur) => ({ ...cur, ...patch }))} />
+          </Group>
+        )}
 
         {/* ---- グループ・タグ（タップで付け外し） */}
         <Group title="所属グループ" footer="会社・学校・部活など、どこの集まりにいるか">

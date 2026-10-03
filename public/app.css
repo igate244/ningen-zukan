@@ -386,3 +386,24 @@ a { color: var(--accent); }
 .fab.fab-sub { background: var(--surface); color: var(--c-event); border: 1px solid var(--line); height: 44px; padding: 0 14px; }
 /* .check-inline の小さいチェック指定にスイッチが潰されないように */
 .check-inline input.switch { width: 46px; height: 28px; }
+
+/* ---- 好き・信頼メーター */
+.feel { background: var(--surface); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); margin-top: 14px; }
+.fgroup .feel { box-shadow: none; margin-top: 0; border-radius: 0; }
+.feel-row { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.feel-label { width: 34px; flex: none; font-size: 13px; font-weight: 700; color: var(--text-2); }
+.feel-scale { display: flex; gap: 5px; flex: 1; max-width: 230px; }
+.feel-step { flex: 1; height: 22px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); padding: 0; }
+.feel-step.fill.lv1, .feel-value.lv1 { --fc: #b4423a; }
+.feel-step.fill.lv2, .feel-value.lv2 { --fc: #d08a4a; }
+.feel-step.fill.lv3, .feel-value.lv3 { --fc: #9a9a9a; }
+.feel-step.fill.lv4, .feel-value.lv4 { --fc: #4f9a8e; }
+.feel-step.fill.lv5, .feel-value.lv5 { --fc: #2f6f6a; }
+.feel-step.fill { background: var(--fc); border-color: var(--fc); opacity: 0.45; }
+.feel-step.fill.on { opacity: 1; }
+.feel-value { width: 84px; flex: none; text-align: right; font-size: 13px; font-weight: 700; color: var(--fc, var(--text-3)); }
+.feel-type { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
+.feel-recent { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-3); }
+.feel-recent span.i { font-size: 16px; }
+.like-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--fc); }
+.like-dot.lv1 { --fc: #b4423a; } .like-dot.lv2 { --fc: #d08a4a; } .like-dot.lv3 { --fc: #9a9a9a; } .like-dot.lv4 { --fc: #4f9a8e; } .like-dot.lv5 { --fc: #2f6f6a; }

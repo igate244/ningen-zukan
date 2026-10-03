@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { age, daysSince, daysToBirthday, sinceLabel } from "../dates";
-import { CATEGORIES, CATEGORY_LABEL, type Category, type Person } from "../model";
+import { CATEGORIES, CATEGORY_LABEL, LIKE_LABEL, TRUST_LABEL, type Category, type Person } from "../model";
 import { navigate } from "../router";
 import { alive, lastMetMap, useData } from "../store";
 import { Avatar, Icon } from "./common";
 
-type Sort = "birthday" | "kana" | "recent" | "stale" | "added";
+type Sort = "birthday" | "kana" | "recent" | "stale" | "added" | "like" | "trust";
 
 const SORT_LABEL: Record<Sort, string> = {
   birthday: "誕生日が近い順",
@@ -15,6 +15,8 @@ const SORT_LABEL: Record<Sort, string> = {
   recent: "最近会った順",
   stale: "ご無沙汰順",
   added: "追加した順",
+  like: "好きな順",
+  trust: "頼れる順",
 };
 
 // 一覧の状態は画面を離れても覚えておく（詳細から戻ったときに検索がリセットされないように）
@@ -60,6 +62,10 @@ export const PeopleList = () => {
           return la === lb ? byKana(a, b) : la.localeCompare(lb);
         case "added":
           return b.createdAt - a.createdAt;
+        case "like":
+        case "trust":
+          // 未設定の人は最後に回す
+          return (b[sort] ?? 0) - (a[sort] ?? 0) || byKana(a, b);
         default:
           return byKana(a, b);
       }
@@ -159,11 +165,14 @@ export const PeopleList = () => {
                         <Icon name="star" size={13} fill />
                       </span>
                     )}
+                    {p.like && <i className={`like-dot lv${p.like}`} title={LIKE_LABEL[p.like]} />}
                     {p.name}
                   </div>
                   <div className="row-sub">{[p.org, p.dept, p.title].filter(Boolean).join(" ・ ") || CATEGORY_LABEL[p.category]}</div>
                 </div>
-                {sort === "birthday" ? (
+                {sort === "like" || sort === "trust" ? (
+                  <div className="row-side">{p[sort] ? (sort === "like" ? LIKE_LABEL : TRUST_LABEL)[p[sort]!] : ""}</div>
+                ) : sort === "birthday" ? (
                   <div className={`row-side ${(daysToBirthday(p.birthDate) ?? 99) <= 7 ? "soon" : ""}`}>{birthdayLabel(p)}</div>
                 ) : (
                   <div className={`row-side ${days !== null && days > 90 ? "stale" : ""}`}>{met ? sinceLabel(met) : ""}</div>

@@ -83,6 +83,10 @@ export interface Person extends Base {
   /** 写真が無いときのアイコンの文字（未設定なら名前の 1 文字目） */
   iconChar?: string;
   pinned?: boolean;
+  /** 自分からの好感度（1 嫌い〜5 大好き） */
+  like?: number;
+  /** 自分からの信頼度（1 不安〜5 すごく頼れる） */
+  trust?: number;
   /** 自分自身を表す特別な人物 */
   isSelf?: boolean;
 
@@ -212,7 +216,27 @@ export interface LogEntry extends Base {
   text: string;
   /** 毎年くり返す（結婚記念日など。イベントのときだけ使う） */
   yearly?: boolean;
+  /** そのときの印象 */
+  impression?: Impression;
 }
+
+export const IMPRESSIONS = ["good", "neutral", "bad"] as const;
+export type Impression = (typeof IMPRESSIONS)[number];
+export const IMPRESSION_LABEL: Record<Impression, string> = { good: "よかった", neutral: "ふつう", bad: "いまいち" };
+export const IMPRESSION_ICON: Record<Impression, string> = { good: "😊", neutral: "😐", bad: "😞" };
+
+export const LIKE_LABEL = ["", "嫌い", "苦手", "ふつう", "好き", "大好き"];
+export const TRUST_LABEL = ["", "不安", "やや不安", "ふつう", "頼れる", "すごく頼れる"];
+
+/** 好き × 信頼 の組み合わせから、付き合い方のタイプを一言で */
+export const feelingType = (like?: number, trust?: number): string | null => {
+  if (!like || !trust) return null;
+  if (like >= 4 && trust >= 4) return "好きで頼れる人";
+  if (like <= 2 && trust >= 4) return "苦手だけど頼れる人";
+  if (like >= 4 && trust <= 2) return "好きだけど任せると不安な人";
+  if (like <= 2 && trust <= 2) return "距離をおきたい人";
+  return null;
+};
 
 /** 画像の目録（同期対象）。実体の Blob は端末内の別テーブルにある */
 export interface ImageMeta extends Base {
