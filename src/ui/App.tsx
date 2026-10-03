@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect } from "react";
 import { navigate, useRoute } from "../router";
+import { HOME_URL } from "../config";
 import { reconnect, useSyncState } from "../sync";
 import { Icon, TopBar } from "./common";
 import { LogEdit, LogsPage } from "./Logs";
@@ -50,6 +51,21 @@ const TabShell = ({ title, active, children }: { title: string; active: string; 
   </>
 );
 
+/** 旧アドレス（GitHub Pages）で開いたときの引っ越し案内 */
+const MovedBanner = () => (
+  <div className="card banner" style={{ margin: "8px 16px 0", flexDirection: "column", alignItems: "stretch", gap: 8, borderColor: "var(--warn)" }}>
+    <div className="small">
+      <strong>人間図鑑は新しいアドレスに引っ越しました。</strong>
+      <br />
+      ① 設定 →「書き出し（写真も含む）」でデータを保存 → ② 下のボタンで新しいアドレスを開く → ③ 新しい方の 設定 →「読み込み」でそのファイルを選ぶ
+    </div>
+    <div className="actions" style={{ marginTop: 0 }}>
+      <button type="button" className="btn" onClick={() => navigate("/settings")}>① 書き出しへ</button>
+      <a className="btn primary" href={HOME_URL} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>② 新しいアドレス</a>
+    </div>
+  </div>
+);
+
 export const App = () => {
   const { path, query } = useRoute();
   const key = path.join("/");
@@ -73,5 +89,10 @@ export const App = () => {
   else if (a === "settings") page = <TabShell title="設定" active="settings"><SettingsPage /></TabShell>;
   else page = <TabShell title="人間図鑑" active=""><PeopleList /></TabShell>;
 
-  return <div className="app">{page}</div>;
+  return (
+    <div className="app">
+      {location.hostname.endsWith("github.io") && <MovedBanner />}
+      {page}
+    </div>
+  );
 };

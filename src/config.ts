@@ -25,3 +25,6 @@ export const PUSH_FIREBASE = {
 };
 export const PUSH_VAPID_KEY = "BGif6O5vsA47rPLj9yr8DrQ4V0iQwJQE3jaGB6Pb4rB0NkORFMEiRP5z7mkEqC5JKT4NOqAbxx280ig1-4F6VYo";
 export const PUSH_COLLECTION = "ningenPush";
+
+/** 本来の置き場所（GitHub Pages 版はここへの引っ越し案内を出す） */
+export const HOME_URL = "https://ningen-zukan.web.app/";
