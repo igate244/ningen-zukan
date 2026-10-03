@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "keep-app-30128"
+  },
+  "targets": {
+    "keep-app-30128": {
+      "hosting": {
+        "app": [
+          "ningen-zukan"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

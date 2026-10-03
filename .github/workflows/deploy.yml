@@ -1,4 +1,7 @@
-# main に push されたら GitHub Pages に自動公開する
+# main に push されたら公開する
+#   ・Firebase Hosting（https://ningen-zukan.web.app ＝ 本来の置き場所）
+#       → リポジトリの Secrets に FIREBASE_SERVICE_ACCOUNT（サービスアカウントの鍵 JSON）があるときだけ
+#   ・GitHub Pages（旧アドレス。引っ越しの案内を出すために残している）
 name: Deploy
 
 on:
@@ -11,12 +14,31 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 jobs:
-  build:
+  firebase:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - name: 鍵が未登録なら飛ばす
+        if: env.HAS_KEY != 'true'
+        run: echo "FIREBASE_SERVICE_ACCOUNT が未登録なので Firebase への公開は飛ばします"
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        if: env.HAS_KEY == 'true'
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: keep-app-30128
+          target: app
+          channelId: live
+
+  pages-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,9 +52,12 @@ jobs:
         with:
           path: dist
 
-  deploy:
-    needs: build
+  pages-deploy:
+    needs: pages-build
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
