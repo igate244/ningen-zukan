@@ -27,11 +27,32 @@ export interface GEdge {
   faint?: boolean;
 }
 
+/** 家系図の「開く・たたむ」ボタン */
+export interface GToggle {
+  key: string;
+  x: number;
+  y: number;
+  dir: "down" | "up";
+  collapsed: boolean;
+  /** たたまれている人数 */
+  count: number;
+  /** 押したときに開閉の印を付け外しする人 */
+  ids: string[];
+}
+
 export interface Graph {
   nodes: GNode[];
   edges: GEdge[];
   width: number;
   height: number;
+  toggles?: GToggle[];
+}
+
+export interface Collapse {
+  /** この人（夫婦）の子から下をたたむ */
+  down: Set<string>;
+  /** この人の親から上をたたむ */
+  up: Set<string>;
 }
 
 export const NODE_R = 26;
@@ -243,7 +264,7 @@ export const buildRadial = (data: AppData, centerId: string, maxDepth: 1 | 2): G
 //   ・異父・異母のきょうだいは横線を分ける
 // 夫婦（とその元配偶者）をひとまとまりの「組」として扱い、組を木のように並べる。
 
-const X_GAP = 100;
+const X_GAP = 118;
 const Y_GAP = 170;
 
 interface Unit {
@@ -252,7 +273,12 @@ interface Unit {
   gen: number;
 }
 
-export const buildFamily = (data: AppData, centerId: string, maxSteps = Infinity): Graph => {
+export const buildFamily = (
+  data: AppData,
+  centerId: string,
+  maxSteps = Infinity,
+  collapse: Collapse = { down: new Set(), up: new Set() },
+): Graph => {
   const { persons, rels } = aliveIndex(data);
   const fx = familyIndex(data);
   const center = persons.get(centerId);
@@ -266,6 +292,13 @@ export const buildFamily = (data: AppData, centerId: string, maxSteps = Infinity
   }
 
   // ---- 世代番号（親は -1、子は +1、夫婦・兄弟は同じ）と、見つかった順
+  // たたんだ人の親へは、どの子からも上がらない（配偶者として出てくる人はそのまま出す）
+  const blockedUp = new Set<string>();
+  for (const id of collapse.up) for (const p of parentsOf(fx, id)) if (p !== centerId) blockedUp.add(p);
+  const sharedParentsCollapsed = (a: string, b: string): boolean => {
+    const shared = parentsOf(fx, a).filter((p) => parentsOf(fx, b).includes(p));
+    return shared.length > 0 && shared.every((p) => collapse.down.has(p) || blockedUp.has(p));
+  };
   const gen = new Map<string, number>([[centerId, 0]]);
   const order = new Map<string, number>([[centerId, 0]]);
   const steps = new Map<string, number>([[centerId, 0]]);
@@ -277,8 +310,14 @@ export const buildFamily = (data: AppData, centerId: string, maxSteps = Infinity
     if (st >= maxSteps) continue;
     // 兄弟姉妹は（親を経由しても）1 歩とみなす
     const next: Array<[string, number]> = [
-      ...(adj.get(id) ?? []).map((r): [string, number] => [other(r, id), r.type === "parent" ? (r.a === id ? g + 1 : g - 1) : g]),
-      ...siblingsOf(fx, id).map((x): [string, number] => [x.id, g]),
+      ...(adj.get(id) ?? [])
+        // たたんだ人の子・親へは進まない
+        .filter((r) => !(r.type === "parent" && r.a === id && collapse.down.has(id)))
+        .filter((r) => !(r.type === "parent" && r.b === id && blockedUp.has(r.a)))
+        .map((r): [string, number] => [other(r, id), r.type === "parent" ? (r.a === id ? g + 1 : g - 1) : g]),
+      ...siblingsOf(fx, id)
+        .filter((x) => !sharedParentsCollapsed(id, x.id))
+        .map((x): [string, number] => [x.id, g]),
     ];
     for (const [o, og] of next) {
       if (gen.has(o)) continue;
@@ -318,13 +357,24 @@ export const buildFamily = (data: AppData, centerId: string, maxSteps = Infinity
     const withParents = [...u.members].sort((a, b) => order.get(a)! - order.get(b)!).find((m) => parentsIn(m).length > 0);
     if (withParents) primaryParent.set(u.id, unitOf.get(parentsIn(withParents)[0])!);
   }
+  // きょうだいの並び：生年月日 → 生まれ順 → 不明は後ろ（比べられない人がいても順番が崩れないよう数値で）
+  const ageKey = (id?: string): number => {
+    const p = persons.get(id ?? "");
+    if (!p) return Number.MAX_SAFE_INTEGER;
+    if (p.birthDate && !p.birthYearUnknown) {
+      const t = new Date(p.birthDate).getTime();
+      if (!Number.isNaN(t)) return t;
+    }
+    if (p.birthOrder) return 4e12 + p.birthOrder; // 生年月日が無い人は後ろ、その中で生まれ順
+    return 5e12;
+  };
   const childUnits = (u: Unit): Unit[] =>
     units
       .filter((c) => primaryParent.get(c.id) === u)
       .sort((a, b) => {
         const pa = a.members.find((m) => parentsIn(m).some((p) => u.members.includes(p)));
         const pb = b.members.find((m) => parentsIn(m).some((p) => u.members.includes(p)));
-        return compareAge(persons.get(pa ?? ""), persons.get(pb ?? "")) || order.get(pa ?? "")! - order.get(pb ?? "")!;
+        return ageKey(pa) - ageKey(pb) || order.get(pa ?? "")! - order.get(pb ?? "")!;
       });
 
   // ---- 木の幅を計算して左から詰める（子の組の真ん中に親の組を置く）
@@ -490,7 +540,38 @@ export const buildFamily = (data: AppData, centerId: string, maxSteps = Infinity
     edges.push({ id: r.id, rel: r, kind: "family", points: [[a.x, a.y - NODE_R - 3], [a.x, top], [b.x, top], [b.x, b.y - NODE_R - 3]] });
   }
 
-  return { nodes, edges, ...bounds(nodes) };
+  // ---- 開く・たたむボタン
+  const toggles: GToggle[] = [];
+  const done = new Set<string>();
+  for (const n of nodes) {
+    // 下（子）：夫婦なら 2 人の真ん中、ひとりならその人の下
+    const kids = childrenOf(fx, n.id);
+    if (kids.length && !done.has(n.id)) {
+      const partner = [...spousesOf(fx, n.id), ...exSpousesOf(fx, n.id)].find((o) => pos.has(o) && kids.some((k) => parentsOf(fx, k).includes(o)));
+      const ids = partner ? [n.id, partner] : [n.id];
+      ids.forEach((i) => done.add(i));
+      const collapsed = ids.some((i) => collapse.down.has(i));
+      const allKids = [...new Set(ids.flatMap((i) => childrenOf(fx, i)))];
+      const hidden = allKids.filter((k) => !pos.has(k)).length;
+      if (collapsed || hidden < allKids.length) {
+        const tx = partner ? (n.x + pos.get(partner)!.x) / 2 : n.x;
+        toggles.push({ key: `d-${ids.join("+")}`, x: tx, y: n.y + NODE_R + 52, dir: "down", collapsed, count: hidden, ids });
+      }
+    }
+    // 上（親）
+    const ps = parentsOf(fx, n.id);
+    const isCore = n.id === centerId || spousesOf(fx, centerId).includes(n.id) || exSpousesOf(fx, centerId).includes(n.id);
+    if (ps.length && isCore) {
+      const collapsed = collapse.up.has(n.id);
+      const shown = ps.filter((p) => pos.has(p)).length;
+      // 上向きのボタンは親の組の線の上（親と子の間）に置く
+      if (collapsed || shown > 0) {
+        toggles.push({ key: `u-${n.id}`, x: n.x + NODE_R + 8, y: n.y - NODE_R - 8, dir: "up", collapsed, count: ps.length - shown, ids: [n.id] });
+      }
+    }
+  }
+
+  return { nodes, edges, toggles, ...bounds(nodes) };
 };
 
 /** 組の中の並び：夫が左・妻が右。相手が複数いる人は真ん中で、元配偶者を外側に */
@@ -518,10 +599,10 @@ const arrangeCouple = (members: string[], fx: ReturnType<typeof familyIndex>): s
 // 家族は家系図の決まりで並べ、仕事の人は左、友人・紹介などは右に縦に並べる。
 // 仕事の列は上司が上、部下が下。
 
-export const buildCombined = (data: AppData, centerId: string, maxDepth: 1 | 2): Graph => {
+export const buildCombined = (data: AppData, centerId: string, maxDepth: 1 | 2, collapse?: Collapse): Graph => {
   const { persons, rels, adj } = aliveIndex(data);
   const fx = familyIndex(data);
-  const famGraph = buildFamily(data, centerId, maxDepth);
+  const famGraph = buildFamily(data, centerId, maxDepth, collapse);
   if (!famGraph.nodes.length) return famGraph;
   const nodes = [...famGraph.nodes];
   const edges = [...famGraph.edges];
@@ -596,5 +677,6 @@ export const buildCombined = (data: AppData, centerId: string, maxDepth: 1 | 2):
   const my = (Math.min(...allY) + Math.max(...allY)) / 2;
   const shifted = nodes.map((n) => ({ ...n, x: n.x - mx, y: n.y - my }));
   const shiftedEdges = edges.map((e) => ({ ...e, points: e.points.map(([px, py]) => [px - mx, py - my] as [number, number]) }));
-  return { nodes: shifted, edges: shiftedEdges, ...bounds(shifted) };
+  const toggles = (famGraph.toggles ?? []).map((t) => ({ ...t, x: t.x - mx, y: t.y - my }));
+  return { nodes: shifted, edges: shiftedEdges, toggles, ...bounds(shifted) };
 };

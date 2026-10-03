@@ -1,7 +1,7 @@
 // src/ui/MapPage.tsx — 相関図・家系図の画面
 
 import { useEffect, useMemo, useState } from "react";
-import { buildCombined, buildFamily } from "../graph";
+import { type Collapse, type GToggle, buildCombined, buildFamily } from "../graph";
 import { SELF_ID, selfLabel } from "../model";
 import { navigate, useRoute } from "../router";
 import { alive, useData } from "../store";
@@ -11,7 +11,7 @@ import { GraphLegend, GraphView } from "./GraphView";
 type Mode = "radial" | "family";
 
 // 画面を離れても最後に見ていた状態を覚えておく
-const memo = { center: SELF_ID, mode: "radial" as Mode, depth: 2 as 1 | 2 };
+const memo = { center: SELF_ID, mode: "radial" as Mode, depth: 2 as 1 | 2, collapse: { down: new Set<string>(), up: new Set<string>() } as Collapse };
 
 export const MapPage = () => {
   const data = useData();
@@ -24,6 +24,17 @@ export const MapPage = () => {
   const [center, setCenterState] = useState(memo.center);
   const [mode, setModeState] = useState<Mode>((query.get("m") as Mode) || memo.mode);
   const [depth, setDepthState] = useState<1 | 2>(memo.depth);
+  const [collapse, setCollapse] = useState<Collapse>(memo.collapse);
+  const toggle = (t: GToggle): void => {
+    const set = new Set(t.dir === "down" ? collapse.down : collapse.up);
+    for (const id of t.ids) {
+      if (t.collapsed) set.delete(id);
+      else set.add(id);
+    }
+    const next = t.dir === "down" ? { ...collapse, down: set } : { ...collapse, up: set };
+    memo.collapse = next;
+    setCollapse(next);
+  };
   // 同じ画面のまま別の人の「相関図」ボタンから来たときも中心を切り替える
   useEffect(() => {
     if (qc) setCenterState(qc);
@@ -46,8 +57,8 @@ export const MapPage = () => {
   const person = data.persons.find((p) => p.id === center && !p.deleted) ?? data.persons.find((p) => p.id === SELF_ID);
   const centerId = person?.id ?? SELF_ID;
   const graph = useMemo(
-    () => (mode === "family" ? buildFamily(data, centerId) : buildCombined(data, centerId, depth)),
-    [data, centerId, mode, depth],
+    () => (mode === "family" ? buildFamily(data, centerId, Infinity, collapse) : buildCombined(data, centerId, depth, collapse)),
+    [data, centerId, mode, depth, collapse],
   );
   const relCount = useMemo(() => alive(data.relations).length, [data.relations]);
 
@@ -98,12 +109,12 @@ export const MapPage = () => {
         </div>
       ) : (
         <GraphView graph={graph} centerId={centerId} height="calc(100dvh - 250px - env(safe-area-inset-bottom))"
-          onTap={(id) => (id === centerId ? navigate(`/p/${id}`) : setCenter(id))} />
+          onTap={(id) => (id === centerId ? navigate(`/p/${id}`) : setCenter(id))} onToggle={toggle} />
       )}
 
       {!lonely && (
         <div className="map-hint small muted">
-          人をタップ → その人を中心に ・ 中心の人をタップ → ページを開く
+          タップで中心を移動（中心の人はページへ）・ −／＋ でたたむ／開く
         </div>
       )}
 

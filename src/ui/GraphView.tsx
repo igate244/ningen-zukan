@@ -1,7 +1,7 @@
 // src/ui/GraphView.tsx — つながり図の描画（指でドラッグして移動、2 本指で拡大縮小）
 
 import { type PointerEvent, type WheelEvent, useEffect, useMemo, useRef, useState } from "react";
-import { type GEdge, type GNode, type Graph, NODE_R } from "../graph";
+import { type GEdge, type GNode, type GToggle, type Graph, NODE_R } from "../graph";
 import { useImageUrl } from "../image";
 import { iconCharOf, selfLabel } from "../model";
 
@@ -27,7 +27,8 @@ const Node = ({ node, isCenter, onTap }: { node: GNode; isCenter: boolean; onTap
   const url = useImageUrl(node.person.photo);
   const r = isCenter ? NODE_R + 8 : NODE_R;
   const clip = `clip-${node.id}`;
-  const name = selfLabel(node.person);
+  // 全角の空白は詰めて、長い名前は省略して隣と重ならないようにする
+  const name = selfLabel(node.person).replace(/[\s\u3000]+/g, " ");
   return (
     <g transform={`translate(${node.x},${node.y})`} className="g-node" onClick={() => onTap(node.id)} style={{ cursor: "pointer" }}>
       <clipPath id={clip}>
@@ -47,24 +48,40 @@ const Node = ({ node, isCenter, onTap }: { node: GNode; isCenter: boolean; onTap
         </>
       )}
       <text y={r + 17} textAnchor="middle" className="g-name" fontWeight={isCenter ? 800 : 700} fontSize={isCenter ? 14 : 12.5}>
-        {short(name, 9)}
+        {short(name, isCenter ? 9 : 7)}
       </text>
       {node.sub && (
         <text y={r + 32} textAnchor="middle" className="g-sub" fontSize={10.5}>
-          {short(node.sub, 12)}
+          {short(node.sub, 9)}
         </text>
       )}
     </g>
   );
 };
 
+const Toggle = ({ t, onToggle }: { t: GToggle; onToggle: (t: GToggle) => void }) => (
+  <g transform={`translate(${t.x},${t.y})`} onClick={(e) => { e.stopPropagation(); onToggle(t); }} style={{ cursor: "pointer" }}>
+    <circle r={14} fill="transparent" />
+    <circle r={10} fill="var(--surface)" stroke="var(--edge-family)" strokeWidth={1.5} />
+    <text textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight={700} fill="var(--edge-family)">
+      {t.collapsed ? "+" : "−"}
+    </text>
+    {t.collapsed && t.count > 0 && (
+      <text x={14} textAnchor="start" dominantBaseline="central" fontSize={10} className="g-sub">
+        {t.dir === "down" ? `子${t.count}人` : `親${t.count}人`}
+      </text>
+    )}
+  </g>
+);
+
 export const GraphView = ({
-  graph, centerId, onTap, height,
+  graph, centerId, onTap, height, onToggle,
 }: {
   graph: Graph;
   centerId: string;
   onTap: (id: string) => void;
   height: number | string;
+  onToggle?: (t: GToggle) => void;
 }) => {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 360, h: 400 });
@@ -184,6 +201,9 @@ export const GraphView = ({
           })}
           {graph.nodes.map((n) => (
             <Node key={n.id} node={n} isCenter={n.id === centerId} onTap={tap} />
+          ))}
+          {onToggle && (graph.toggles ?? []).map((t) => (
+            <Toggle key={t.key} t={t} onToggle={(x) => !gesture.current?.moved && onToggle(x)} />
           ))}
         </g>
       </svg>
