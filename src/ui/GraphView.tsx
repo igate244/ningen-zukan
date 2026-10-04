@@ -157,7 +157,28 @@ export const GraphView = ({
   }, [graph, size]);
   useEffect(() => setView({ x: 0, y: 0, k: fitK }), [fitK, centerId, graph.nodes.length]);
 
+  // 指を離した合図は、触れていた丸が描き直しで消えると svg まで届かないことがある。
+  // 取りこぼすと「離したはずの指」が残り、以降のタッチがすべて 2 本指扱いになって反応しなくなるので、
+  // 画面全体でも拾っておく。
+  useEffect(() => {
+    const drop = (e: globalThis.PointerEvent): void => {
+      pointers.current.delete(e.pointerId);
+    };
+    window.addEventListener("pointerup", drop);
+    window.addEventListener("pointercancel", drop);
+    return () => {
+      window.removeEventListener("pointerup", drop);
+      window.removeEventListener("pointercancel", drop);
+    };
+  }, []);
+  // 図が切り替わったら触っている指の記録もいったん空にする
+  useEffect(() => {
+    pointers.current.clear();
+  }, [graph]);
+
   const onDown = (e: PointerEvent): void => {
+    // 1 本目の指（ほかに触れている指が無い）なら、残っている古い記録は捨てる
+    if (e.isPrimary) pointers.current.clear();
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
