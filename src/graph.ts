@@ -817,3 +817,233 @@ export const buildGroup = (data: AppData, groupId: string): Graph => {
   }
   return { nodes, edges, ...bounds(nodes) };
 };
+
+// ===================================================================== 仕事・プライベートの図
+//
+// 相関図を「親族／仕事／プライベート」に分けたうちの、親族以外の 2 つ。
+//   ・仕事：上司は上、部下は下、同僚やグループ（会社・部署）は左右
+//   ・プライベート：友人・紹介・グループ（学校・趣味・地域）を中心のまわりに
+// 同じグループの人は「◯◯ 12人」の丸にまとめ、タップで開く。
+// 親族以外の人の家族（上司の奥さんなど）は、その人の外側に小さく添える。
+
+export type Scope = "kin" | "work" | "private";
+export const SCOPE_LABEL: Record<Scope, string> = { kin: "親族", work: "仕事", private: "プライベート" };
+
+const WORK_REL: RelType[] = ["boss", "colleague"];
+
+/** 自分の親族（自分から親子・夫婦・兄弟でたどれる人と、区分が家族・親族の人） */
+export const kinSetOf = (data: AppData): Set<string> => {
+  const { persons, adj } = aliveIndex(data);
+  const set = new Set<string>([SELF_ID_FOR_GRAPH]);
+  const queue = [SELF_ID_FOR_GRAPH];
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const r of adj.get(id) ?? []) {
+      if (!FAMILY.includes(r.type)) continue;
+      const o = other(r, id);
+      if (!set.has(o)) {
+        set.add(o);
+        queue.push(o);
+      }
+    }
+  }
+  for (const p of persons.values()) if (p.category === "family" || p.category === "relative") set.add(p.id);
+  set.delete(SELF_ID_FOR_GRAPH);
+  return set;
+};
+
+/** その人がどの図に出るか（複数あり） */
+export const scopesOf = (data: AppData, id: string, kin = kinSetOf(data)): Set<Scope> => {
+  const out = new Set<Scope>();
+  if (id === SELF_ID_FOR_GRAPH) return new Set<Scope>(["kin", "work", "private"]);
+  const p = data.persons.find((x) => x.id === id && !x.deleted);
+  if (!p) return out;
+  const groups = new Map((data.groups ?? []).filter((g) => !g.deleted).map((g) => [g.id, g]));
+  const gKinds = p.groups.map((g) => groups.get(g)?.kind).filter(Boolean);
+  const rels = data.relations.filter((r) => !r.deleted && (r.a === id || r.b === id));
+  if (kin.has(id)) out.add("kin");
+  if (p.category === "work" || gKinds.includes("work") || rels.some((r) => WORK_REL.includes(r.type))) out.add("work");
+  if (!kin.has(id)) {
+    const priv =
+      p.category === "friend" || p.category === "other" ||
+      gKinds.some((k) => k !== "work" && k !== "family") ||
+      rels.some((r) => r.type === "friend" || r.type === "introduced");
+    if (priv || !out.has("work")) out.add("private");
+  }
+  return out;
+};
+
+export const buildScoped = (data: AppData, centerId: string, scope: "work" | "private", maxDepth: 1 | 2, collapse?: Collapse): Graph => {
+  const { persons, rels, adj } = aliveIndex(data);
+  const fx = familyIndex(data);
+  const center = persons.get(centerId);
+  if (!center) return { nodes: [], edges: [], width: 0, height: 0 };
+  const kin = kinSetOf(data);
+  const scopeCache = new Map<string, Set<Scope>>();
+  const inScope = (id: string): boolean => {
+    if (id === centerId) return true;
+    if (!scopeCache.has(id)) scopeCache.set(id, scopesOf(data, id, kin));
+    return scopeCache.get(id)!.has(scope);
+  };
+  const nonFam = (r: Relation): boolean => !FAMILY.includes(r.type);
+  const label = (r: Relation, viewer: string, o: string): string => (r.labelBy === viewer ? r.label : undefined) ?? kinLabel(fx, viewer, o) ?? relationLabelFrom(r, viewer);
+  const name = (id: string): string => (persons.get(id)!.isSelf ? "自分" : persons.get(id)!.name);
+
+  // ---- 1 周目の候補：中心と（家族以外で）直接つながる人
+  const ring1: Array<{ id: string; r?: Relation }> = [];
+  for (const r of adj.get(centerId) ?? []) {
+    const o = other(r, centerId);
+    if (nonFam(r) && inScope(o) && !ring1.some((x) => x.id === o)) ring1.push({ id: o, r });
+  }
+
+  // ---- グループ：この図に合う種類のグループだけ
+  const groupOk = (kind: string): boolean => (scope === "work" ? kind === "work" : kind !== "work" && kind !== "family");
+  const groups = new Map((data.groups ?? []).filter((g) => !g.deleted && groupOk(g.kind)).map((g) => [g.id, g]));
+  const centerGroups = center.groups.filter((g) => groups.has(g));
+  for (const p of persons.values()) {
+    if (p.id === centerId || ring1.some((x) => x.id === p.id)) continue;
+    if (p.groups.some((g) => centerGroups.includes(g))) ring1.push({ id: p.id });
+  }
+  const count = new Map<string, number>();
+  for (const { id } of ring1) for (const g of persons.get(id)!.groups) if (groups.has(g)) count.set(g, (count.get(g) ?? 0) + 1);
+  const bucketOf = new Map<string, string>();
+  // 上司・部下と、温度を付けた相手は丸にしまわず、いつも見えるようにする
+  const keepOut = (r?: Relation): boolean => !!r && (r.type === "boss" || !!r.mood);
+  for (const { id, r } of ring1) {
+    if (keepOut(r)) continue;
+    const gs = persons.get(id)!.groups.filter((g) => groups.has(g));
+    const pick = gs.find((g) => centerGroups.includes(g)) ?? gs.filter((g) => (count.get(g) ?? 0) >= 2).sort((a, b) => count.get(b)! - count.get(a)!)[0];
+    if (pick) bucketOf.set(id, pick);
+  }
+  const buckets = new Map<string, string[]>();
+  for (const [id, g] of bucketOf) buckets.set(g, [...(buckets.get(g) ?? []), id]);
+  for (const [g, ids] of buckets) if (ids.length < 2 && !centerGroups.includes(g)) { buckets.delete(g); ids.forEach((i) => bucketOf.delete(i)); }
+  const openSet = collapse?.groupsOpen ?? new Set<string>();
+
+  type Item = { kind: "person"; id: string; r?: Relation } | { kind: "group"; gid: string; ids: string[] };
+  const items: Item[] = [
+    ...ring1.filter((x) => !bucketOf.has(x.id)).map((x): Item => ({ kind: "person", id: x.id, r: x.r })),
+    ...[...buckets.entries()].map(([gid, ids]): Item => ({ kind: "group", gid, ids: sortByAge(fx, ids) })),
+  ];
+  const keyOf = (it: Item): string => (it.kind === "person" ? it.id : `grp:${it.gid}`);
+
+  // ---- 1 周目の角度
+  const deg = (d: number): number => (d * Math.PI) / 180;
+  const n1 = items.length;
+  const R1 = Math.max(150, (n1 * 100) / (2 * Math.PI));
+  const gap1 = Math.min((2 * Math.PI) / Math.max(1, n1), 100 / R1);
+  const want = new Map<string, number>();
+  const spread = (list: Item[], base: number, dir = 1): void =>
+    list.forEach((it, i) => want.set(keyOf(it), base + dir * Math.ceil(i / 2) * (i % 2 ? -1 : 1) * gap1));
+  if (scope === "work") {
+    const isBoss = (it: Item): boolean => it.kind === "person" && it.r?.type === "boss" && it.r.a === it.id;
+    const isSub = (it: Item): boolean => it.kind === "person" && it.r?.type === "boss" && it.r.b === it.id;
+    spread(items.filter(isBoss), deg(-90));
+    spread(items.filter(isSub), deg(90));
+    const side = items.filter((it) => !isBoss(it) && !isSub(it));
+    // グループは左、同僚などは右から埋める
+    const groupsSide = side.filter((it) => it.kind === "group");
+    const peopleSide = side.filter((it) => it.kind === "person").sort((a, b) =>
+      Number((b as { r?: Relation }).r?.type === "colleague") - Number((a as { r?: Relation }).r?.type === "colleague"));
+    spread(groupsSide, deg(180));
+    spread(peopleSide, deg(0));
+  } else {
+    // グループ → 友人 → 紹介 → その他 の順に、真上から時計回りに等間隔
+    const rank = (it: Item): number => (it.kind === "group" ? 0 : it.r?.type === "friend" ? 1 : it.r?.type === "introduced" ? 2 : 3);
+    const sorted = [...items].sort((a, b) => rank(a) - rank(b));
+    sorted.forEach((it, i) => want.set(keyOf(it), deg(-90) + (i / Math.max(1, sorted.length)) * Math.PI * 2));
+  }
+  const angle1 = relaxAngles(want, gap1);
+
+  const nodes: GNode[] = [{ id: centerId, person: center, x: 0, y: 0, depth: 0 }];
+  const pos = new Map<string, GNode>([[centerId, nodes[0]]]);
+  const edges: GEdge[] = [];
+  const kinMark = (id: string): string => (scope === "work" && kin.has(id) ? "・親族" : "");
+  const relWithCenter = (id: string): Relation | undefined => rels.find((r) => (r.a === centerId && r.b === id) || (r.b === centerId && r.a === id));
+
+  for (const it of items) {
+    const a = angle1.get(keyOf(it))!;
+    const x = Math.cos(a) * R1;
+    const y = Math.sin(a) * R1;
+    if (it.kind === "person") {
+      const n: GNode = { id: it.id, person: persons.get(it.id)!, x, y, depth: 1, sub: (it.r ? label(it.r, centerId, it.id) : "") + kinMark(it.id) || undefined };
+      nodes.push(n);
+      pos.set(it.id, n);
+    } else {
+      const g = groups.get(it.gid)!;
+      const open = openSet.has(it.gid);
+      const gid = `grp:${it.gid}`;
+      const gn: GNode = {
+        id: gid, person: { id: gid, name: g.name } as Person, x, y, depth: 1,
+        sub: `${it.ids.length}人${open ? "" : "（タップで開く）"}`,
+        group: { id: g.id, name: g.name, count: it.ids.length, open },
+      };
+      nodes.push(gn);
+      pos.set(gid, gn);
+      edges.push({ id: `${gid}-c`, rel: { id: gid, a: centerId, b: gid, type: "other", createdAt: 0, updatedAt: 0 }, kind: scope === "work" ? "work" : "friend", points: [[0, 0], [x, y]] });
+    }
+  }
+
+  // ---- 2 周目：開いたグループの人、1 周目の人のその先、親族以外の人の家族
+  const outer = new Map<string, { parent: string; sub: string }>();
+  for (const it of items) {
+    if (it.kind === "group") {
+      if (!openSet.has(it.gid)) continue;
+      const g = groups.get(it.gid)!;
+      for (const id of it.ids) {
+        const r = relWithCenter(id);
+        outer.set(id, { parent: `grp:${it.gid}`, sub: (r ? label(r, centerId, id) : g.name) + kinMark(id) });
+      }
+      continue;
+    }
+    for (const r of adj.get(it.id) ?? []) {
+      const o = other(r, it.id);
+      if (o === centerId || pos.has(o) || outer.has(o) || bucketOf.has(o)) continue;
+      const fam = !nonFam(r);
+      // 家族は「この人の家族」として添える（自分の親族は除く）。それ以外は 2 つ先まで見るときだけ
+      if (fam ? kin.has(o) : maxDepth < 2 || !inScope(o)) continue;
+      outer.set(o, { parent: it.id, sub: `${name(it.id)}の${label(r, it.id, o)}` });
+    }
+  }
+  const n2 = outer.size;
+  const R2 = Math.max(R1 + 140, (n2 * 86) / (2 * Math.PI));
+  const gap2 = Math.min((2 * Math.PI) / Math.max(1, n2), 86 / R2);
+  const want2 = new Map<string, number>();
+  const byParent = new Map<string, string[]>();
+  for (const [id, o] of outer) byParent.set(o.parent, [...(byParent.get(o.parent) ?? []), id]);
+  for (const [parent, kids] of byParent) {
+    const base = angle1.get(parent) ?? Math.atan2(pos.get(parent)!.y, pos.get(parent)!.x);
+    kids.forEach((kid, i) => want2.set(kid, base + ((kids.length - 1) / 2 - i) * gap2));
+  }
+  const angle2 = relaxAngles(want2, gap2);
+  for (const [id, a] of angle2) {
+    const o = outer.get(id)!;
+    const n: GNode = { id, person: persons.get(id)!, x: Math.cos(a) * R2, y: Math.sin(a) * R2, depth: 2, sub: o.sub };
+    nodes.push(n);
+    pos.set(id, n);
+    if (o.parent.startsWith("grp:")) {
+      const gn = pos.get(o.parent)!;
+      edges.push({ id: `${o.parent}-${id}`, rel: { id: `${o.parent}-${id}`, a: o.parent, b: id, type: "other", createdAt: 0, updatedAt: 0 }, kind: "other", points: [[gn.x, gn.y], [n.x, n.y]] });
+    }
+  }
+
+  // ---- 人どうしの線
+  for (const r of rels) {
+    if (!pos.has(r.a) || !pos.has(r.b)) continue;
+    const viaGroup = (r.a === centerId && bucketOf.has(r.b)) || (r.b === centerId && bucketOf.has(r.a));
+    if (viaGroup) continue;
+    const a = pos.get(r.a)!;
+    const b = pos.get(r.b)!;
+    const k = edgeKind(r.type);
+    const touchesInner = r.a === centerId || r.b === centerId || (a.depth <= 1 && b.depth <= 1);
+    const isTree = touchesInner || outer.get(r.a)?.parent === r.b || outer.get(r.b)?.parent === r.a;
+    edges.push({
+      id: r.id, rel: r, kind: k === "spouse" || k === "exspouse" ? "family" : k,
+      points: [[a.x, a.y], [b.x, b.y]],
+      faint: !isTree && !r.mood,
+      mood: r.a === centerId || r.b === centerId || r.mood ? r.mood : undefined,
+    });
+  }
+  edges.sort((x, y) => Number(!!y.faint) - Number(!!x.faint));
+  return { nodes, edges, ...bounds(nodes) };
+};

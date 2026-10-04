@@ -1,17 +1,18 @@
-// src/ui/MapPage.tsx — 相関図・家系図の画面
+// src/ui/MapPage.tsx — 相関図の画面（親族／仕事／プライベートの 3 つを切り替え）
 
 import { useEffect, useMemo, useState } from "react";
-import { type Collapse, type GToggle, buildCombined, buildFamily } from "../graph";
+import { type Collapse, type GToggle, SCOPE_LABEL, type Scope, buildFamily, buildScoped, scopesOf } from "../graph";
 import { SELF_ID, selfLabel } from "../model";
 import { navigate, useRoute } from "../router";
 import { alive, useData } from "../store";
 import { Avatar, Icon, PersonPicker } from "./common";
 import { GraphLegend, GraphView, MoodLegend } from "./GraphView";
 
-type Mode = "radial" | "family";
+type Mode = Scope;
+const MODES: Mode[] = ["kin", "work", "private"];
 
 // 画面を離れても最後に見ていた状態を覚えておく
-const memo = { showMood: true, center: SELF_ID, mode: "radial" as Mode, depth: 2 as 1 | 2, collapse: { down: new Set<string>(), up: new Set<string>() } as Collapse };
+const memo = { showMood: true, center: SELF_ID, mode: "work" as Mode, depth: 2 as 1 | 2, collapse: { down: new Set<string>(), up: new Set<string>() } as Collapse };
 
 export const MapPage = () => {
   const data = useData();
@@ -22,7 +23,8 @@ export const MapPage = () => {
   const qc = query.get("c");
   if (qc && qc !== memo.center) memo.center = qc;
   const [center, setCenterState] = useState(memo.center);
-  const [mode, setModeState] = useState<Mode>((query.get("m") as Mode) || memo.mode);
+  const qm = query.get("m") as Mode | null;
+  const [mode, setModeState] = useState<Mode>(qm && MODES.includes(qm) ? qm : memo.mode);
   const [depth, setDepthState] = useState<1 | 2>(memo.depth);
   const [collapse, setCollapse] = useState<Collapse>(memo.collapse);
   const [showMood, setShowMood] = useState(memo.showMood);
@@ -46,17 +48,28 @@ export const MapPage = () => {
   };
   // 同じ画面のまま別の人の「相関図」ボタンから来たときも中心を切り替える
   useEffect(() => {
-    if (qc) setCenterState(qc);
+    if (!qc) return;
+    setCenterState(qc);
+    pickModeFor(qc);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qc]);
 
-  const setCenter = (id: string): void => {
-    memo.center = id;
-    setCenterState(id);
-    navigate(`/map?c=${id}`, true);
-  };
   const setMode = (m: Mode): void => {
     memo.mode = m;
     setModeState(m);
+  };
+  // 中心の人が今の図に出ない人なら、その人が出る図に切り替える（親族 → 仕事 → プライベートの順に優先）
+  const pickModeFor = (id: string): void => {
+    const sc = scopesOf(data, id);
+    if (sc.has(memo.mode)) return;
+    const m = MODES.find((x) => sc.has(x));
+    if (m) setMode(m);
+  };
+  const setCenter = (id: string): void => {
+    memo.center = id;
+    setCenterState(id);
+    pickModeFor(id);
+    navigate(`/map?c=${id}`, true);
   };
   const setDepth = (d: 1 | 2): void => {
     memo.depth = d;
@@ -66,7 +79,7 @@ export const MapPage = () => {
   const person = data.persons.find((p) => p.id === center && !p.deleted) ?? data.persons.find((p) => p.id === SELF_ID);
   const centerId = person?.id ?? SELF_ID;
   const graph = useMemo(
-    () => (mode === "family" ? buildFamily(data, centerId, Infinity, collapse) : buildCombined(data, centerId, depth, collapse)),
+    () => (mode === "kin" ? buildFamily(data, centerId, Infinity, collapse) : buildScoped(data, centerId, mode, depth, collapse)),
     [data, centerId, mode, depth, collapse],
   );
   const relCount = useMemo(() => alive(data.relations).length, [data.relations]);
@@ -83,12 +96,13 @@ export const MapPage = () => {
           <Icon name="down" size={16} />
         </button>
         <div className="segment small-seg">
-          <button type="button" className={mode === "radial" ? "on" : ""} onClick={() => setMode("radial")}>相関図</button>
-          <button type="button" className={mode === "family" ? "on" : ""} onClick={() => setMode("family")}>家系図</button>
+          {MODES.map((m) => (
+            <button type="button" key={m} className={mode === m ? "on" : ""} onClick={() => setMode(m)}>{SCOPE_LABEL[m]}</button>
+          ))}
         </div>
       </div>
 
-      {mode === "radial" && (
+      {mode !== "kin" && (
         <div className="map-sub">
           <GraphLegend />
           <div className="segment tiny-seg">
@@ -104,7 +118,7 @@ export const MapPage = () => {
         </label>
         {showMood && <MoodLegend />}
       </div>
-      {mode === "family" && (
+      {mode === "kin" && (
         <div className="map-sub">
           <GraphLegend family />
           <span className="small muted">上が上の世代・きょうだいは左が年上</span>
@@ -113,9 +127,10 @@ export const MapPage = () => {
 
       {lonely ? (
         <div className="empty" style={{ paddingTop: 60 }}>
-          {mode === "family" ? "家族のつながり（親・子・配偶者・兄弟姉妹）" : "つながり"}がまだ登録されていません。
+          {mode === "kin" ? "家族のつながり（親・子・配偶者・兄弟姉妹）" : mode === "work" ? "仕事のつながり（上司・同僚・仕事のグループ）" : "友人・紹介などのつながり"}がまだ登録されていません。
           <br />
           {relCount === 0 && "人のページの「つながり」から、親・上司・紹介者などを登録すると図になります。"}
+          {mode !== "kin" && " 区分やグループを付けるとこちらに出ます。"}
           <div style={{ marginTop: 16 }}>
             <button type="button" className="btn primary" style={{ display: "inline-flex", flex: "none", padding: "10px 18px" }}
               onClick={() => navigate(`/p/${centerId}?tab=links`)}>

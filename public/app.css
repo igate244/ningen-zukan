@@ -258,7 +258,7 @@ a { color: var(--accent); }
 }
 .map-center-name { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .segment.small-seg { margin-top: 0; position: static; flex: none; }
-.segment.small-seg button { padding: 6px 12px; }
+.segment.small-seg button { padding: 6px 10px; white-space: nowrap; }
 .segment.tiny-seg { margin-top: 0; position: static; flex: none; padding: 2px; }
 .segment.tiny-seg button { padding: 3px 10px; font-size: 11px; white-space: nowrap; }
 .map-sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 16px; flex-wrap: wrap; }
