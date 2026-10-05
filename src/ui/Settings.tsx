@@ -3,7 +3,7 @@
 import { useState } from "react";
 import * as db from "../db";
 import { isConfigured } from "../drive";
-import { type AppData, type Category, CATEGORIES, type Person, type Relation, SELF_ID, emptyPerson, newId, splitName } from "../model";
+import { type AppData, type Person, type Relation, SELF_ID, emptyPerson, newId, splitName, toCategory } from "../model";
 import { navigate } from "../router";
 import { alive, getData, replaceAll, useData } from "../store";
 import { disablePush, enablePush, testPush, usePushState } from "../push";
@@ -76,7 +76,7 @@ const importFromMyme = (json: Record<string, unknown>): { added: number; skipped
 
   for (const c of (json.companions as Array<Record<string, unknown>>) ?? []) {
     if (!c || typeof c.name !== "string") continue;
-    const cat = (CATEGORIES as readonly string[]).includes(String(c.category)) ? (c.category as Category) : "other";
+    const cat = toCategory(c.category);
     push(c.name, (p) => ({
       ...p,
       category: cat,

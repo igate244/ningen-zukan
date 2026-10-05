@@ -11,16 +11,18 @@ export interface Base {
   deleted?: boolean;
 }
 
-export const CATEGORIES = ["work", "family", "relative", "friend", "other"] as const;
+export const CATEGORIES = ["work", "family", "friend"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 export const CATEGORY_LABEL: Record<Category, string> = {
   work: "仕事",
-  family: "家族",
-  relative: "親族",
-  friend: "友人",
-  other: "その他",
+  family: "家族・親族",
+  friend: "友人・知人",
 };
+
+/** 区分をそろえる（以前の「親族」は家族・親族へ、「その他」や不明は友人・知人へ） */
+export const toCategory = (raw: unknown): Category =>
+  raw === "work" ? "work" : raw === "family" || raw === "relative" ? "family" : "friend";
 
 export interface Career {
   id: string;
@@ -294,7 +296,7 @@ export const normalizePerson = (raw: Partial<Person> & { id: string }): Person =
     custom: Array.isArray(raw.custom) ? raw.custom : [],
     nextTopics: Array.isArray(raw.nextTopics) ? raw.nextTopics : [],
     favors: Array.isArray(raw.favors) ? raw.favors : [],
-    category: (CATEGORIES as readonly string[]).includes(raw.category ?? "") ? (raw.category as Category) : "other",
+    category: toCategory(raw.category),
   };
   return migrateLegacy(p, raw as LegacyPerson);
 };

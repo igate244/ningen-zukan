@@ -184,7 +184,7 @@ export const buildRadial = (data: AppData, centerId: string, maxDepth: 1 | 2): G
     if (exes.includes(id)) return "left";
     const p = persons.get(id)!;
     const kind = edgeKind(via.get(id)!.type);
-    if (p.category === "family" || p.category === "relative" || kind === "family") {
+    if (p.category === "family" || kind === "family") {
       // 親族は年上なら上、年下なら下（わからなければ上）
       return compareAge(centerP, p) < 0 ? "bottom" : "top";
     }
@@ -843,13 +843,13 @@ export const kinSetOf = (data: AppData): Set<string> => {
       }
     }
   }
-  for (const p of persons.values()) if (p.category === "family" || p.category === "relative") set.add(p.id);
+  for (const p of persons.values()) if (p.category === "family") set.add(p.id);
   set.delete(SELF_ID_FOR_GRAPH);
   return set;
 };
 
-/** 区分からどの図に出るかを決める（仕事 → 仕事、家族・親族 → 親族、友人・その他 → プライベート） */
-export const scopeOfCategory = (c: Category): Scope => (c === "work" ? "work" : c === "family" || c === "relative" ? "kin" : "private");
+/** 区分からどの図に出るかを決める（仕事 → 仕事、家族・親族 → 親族、友人・知人 → プライベート） */
+export const scopeOfCategory = (c: Category): Scope => (c === "work" ? "work" : c === "family" ? "kin" : "private");
 
 /** その人がどの図に出るか。区分だけで決める（自分はすべての図に出る） */
 export const scopesOf = (data: AppData, id: string): Set<Scope> => {
