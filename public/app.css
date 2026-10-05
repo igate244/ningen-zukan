@@ -410,3 +410,5 @@ a { color: var(--accent); }
 .feel.bare { border-radius: 0; box-shadow: none; margin-top: 0; padding: 4px 0 0; background: transparent; }
 .fgroup .feel.bare { padding: 6px 14px; background: var(--surface); }
 .radar .feel.bare { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }
+.custom-row { display: flex; gap: 6px; align-items: center; }
+.custom-row .custom-label { flex: 0 0 34%; }

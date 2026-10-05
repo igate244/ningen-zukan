@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { age, daysSince, daysToBirthday, sinceLabel } from "../dates";
-import { CATEGORIES, CATEGORY_LABEL, FEEL_AXES, LIKE_LABEL, type Category, type Person } from "../model";
+import { CATEGORIES, CATEGORY_LABEL, type Category, type Person } from "../model";
 import { navigate } from "../router";
 import { alive, lastMetMap, useData } from "../store";
 import { Avatar, Icon } from "./common";
 
-type Sort = "birthday" | "kana" | "recent" | "stale" | "added" | "like" | "trust" | "influence";
+type Sort = "birthday" | "kana" | "recent" | "stale" | "added";
 
 const SORT_LABEL: Record<Sort, string> = {
   birthday: "誕生日が近い順",
@@ -15,9 +15,6 @@ const SORT_LABEL: Record<Sort, string> = {
   recent: "最近会った順",
   stale: "ご無沙汰順",
   added: "追加した順",
-  like: "好意が高い順",
-  trust: "信頼が高い順",
-  influence: "影響が大きい順",
 };
 
 // 一覧の状態は画面を離れても覚えておく（詳細から戻ったときに検索がリセットされないように）
@@ -41,7 +38,7 @@ export const PeopleList = () => {
     const query = q.trim().toLowerCase();
     const hit = (p: Person): boolean =>
       !query ||
-      [p.name, p.kana, p.nickname, p.org, p.dept, p.title, p.note, ...p.tags].some((s) => s?.toLowerCase().includes(query));
+      [p.name, p.kana, p.nickname, p.org, p.dept, p.note, p.likes, p.metHow, ...p.tags].some((s) => s?.toLowerCase().includes(query));
     const filtered = persons.filter((p) => (cat === "all" || p.category === cat) && (!tag || p.tags.includes(tag)) && (!group || p.groups.includes(group)) && hit(p));
     const byKana = (a: Person, b: Person): number => (a.kana || a.name).localeCompare(b.kana || b.name, "ja");
     return filtered.sort((a, b) => {
@@ -63,11 +60,6 @@ export const PeopleList = () => {
           return la === lb ? byKana(a, b) : la.localeCompare(lb);
         case "added":
           return b.createdAt - a.createdAt;
-        case "like":
-        case "trust":
-        case "influence":
-          // 未設定の人は最後に回す
-          return (b[sort] ?? 0) - (a[sort] ?? 0) || byKana(a, b);
         default:
           return byKana(a, b);
       }
@@ -167,14 +159,11 @@ export const PeopleList = () => {
                         <Icon name="star" size={13} fill />
                       </span>
                     )}
-                    {p.like && <i className={`like-dot lv${p.like}`} title={LIKE_LABEL[p.like]} />}
                     {p.name}
                   </div>
-                  <div className="row-sub">{[p.org, p.dept, p.title].filter(Boolean).join(" ・ ") || CATEGORY_LABEL[p.category]}</div>
+                  <div className="row-sub">{[p.org, p.dept].filter(Boolean).join(" ・ ") || CATEGORY_LABEL[p.category]}</div>
                 </div>
-                {sort === "like" || sort === "trust" || sort === "influence" ? (
-                  <div className="row-side">{p[sort] ? FEEL_AXES.find((a) => a.key === sort)!.levels[p[sort]!] : ""}</div>
-                ) : sort === "birthday" ? (
+                {sort === "birthday" ? (
                   <div className={`row-side ${(daysToBirthday(p.birthDate) ?? 99) <= 7 ? "soon" : ""}`}>{birthdayLabel(p)}</div>
                 ) : (
                   <div className={`row-side ${days !== null && days > 90 ? "stale" : ""}`}>{met ? sinceLabel(met) : ""}</div>

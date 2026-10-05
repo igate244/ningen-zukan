@@ -133,7 +133,7 @@ export const PersonPicker = ({
                 <Avatar person={p} size={34} />
                 <div className="row-main">
                   <div className="row-name">{selfLabel(p)}</div>
-                  <div className="row-sub">{[p.org, p.dept, p.title].filter(Boolean).join(" ・ ")}</div>
+                  <div className="row-sub">{[p.org, p.dept].filter(Boolean).join(" ・ ")}</div>
                 </div>
                 {multiple && (
                   <input type="checkbox" readOnly checked={picked.includes(p.id)} style={{ width: 18, height: 18, accentColor: "var(--accent)" }} />

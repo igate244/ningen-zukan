@@ -81,8 +81,8 @@ const importFromMyme = (json: Record<string, unknown>): { added: number; skipped
       ...p,
       category: cat,
       ...toBirth(c.birthDate ?? c.birthday),
-      note: [c.relation, c.note ?? c.description].filter((x) => typeof x === "string" && x).join("\n") || undefined,
-      learnings: typeof c.learnings === "string" ? c.learnings : undefined,
+      note: [c.relation, c.note ?? c.description, typeof c.learnings === "string" && c.learnings ? `【学んだこと】${c.learnings}` : ""]
+        .filter((x) => typeof x === "string" && x).join("\n") || undefined,
       tags: ["MYMEから"],
     }));
   }

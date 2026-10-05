@@ -6,13 +6,13 @@ import { SELF_ID, selfLabel } from "../model";
 import { navigate, useRoute } from "../router";
 import { alive, useData } from "../store";
 import { Avatar, Icon, PersonPicker } from "./common";
-import { GraphLegend, GraphView, MoodLegend } from "./GraphView";
+import { GraphLegend, GraphView } from "./GraphView";
 
 type Mode = Scope;
 const MODES: Mode[] = ["kin", "work", "private"];
 
 // 画面を離れても最後に見ていた状態を覚えておく
-const memo = { showMood: true, center: SELF_ID, mode: "work" as Mode, depth: 2 as 1 | 2, collapse: { down: new Set<string>(), up: new Set<string>() } as Collapse };
+const memo = { center: SELF_ID, mode: "work" as Mode, depth: 2 as 1 | 2, collapse: { down: new Set<string>(), up: new Set<string>() } as Collapse };
 
 export const MapPage = () => {
   const data = useData();
@@ -27,7 +27,6 @@ export const MapPage = () => {
   const [mode, setModeState] = useState<Mode>(qm && MODES.includes(qm) ? qm : memo.mode);
   const [depth, setDepthState] = useState<1 | 2>(memo.depth);
   const [collapse, setCollapse] = useState<Collapse>(memo.collapse);
-  const [showMood, setShowMood] = useState(memo.showMood);
   const toggleGroup = (gid: string): void => {
     const open = new Set(collapse.groupsOpen ?? []);
     if (open.has(gid)) open.delete(gid);
@@ -111,13 +110,6 @@ export const MapPage = () => {
           </div>
         </div>
       )}
-      <div className="map-sub">
-        <label className="check-inline small">
-          <input type="checkbox" checked={showMood} onChange={(e) => { memo.showMood = e.target.checked; setShowMood(e.target.checked); }} />
-          関係の温度を表示
-        </label>
-        {showMood && <MoodLegend />}
-      </div>
       {mode === "kin" && (
         <div className="map-sub">
           <GraphLegend family />
@@ -140,7 +132,7 @@ export const MapPage = () => {
         </div>
       ) : (
         <GraphView graph={graph} centerId={centerId} height="calc(100dvh - 250px - env(safe-area-inset-bottom))"
-          onTap={(id) => (id.startsWith("grp:") ? toggleGroup(id.slice(4)) : id === centerId ? navigate(`/p/${id}`) : setCenter(id))} onToggle={toggle} showMood={showMood} />
+          onTap={(id) => (id.startsWith("grp:") ? toggleGroup(id.slice(4)) : id === centerId ? navigate(`/p/${id}`) : setCenter(id))} onToggle={toggle} />
       )}
 
       {!lonely && (

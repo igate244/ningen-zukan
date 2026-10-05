@@ -12,14 +12,13 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { shrinkImage } from "../image";
 import {
-  CATEGORIES, CATEGORY_LABEL, type Career, GENDERS, GENDER_LABEL, type Person, type WorkManual,
+  CATEGORIES, CATEGORY_LABEL, type CustomField, GENDERS, GENDER_LABEL, type Person,
   emptyPerson, iconCharOf, joinName, newId, splitName,
 } from "../model";
 import { goBack, navigate } from "../router";
 import { addImage, alive, deletePerson, getData, savePerson, useData } from "../store";
 import { Avatar, Icon, TopBar } from "./common";
 import { GroupEditSheet } from "./Groups";
-import { FeelingMeter } from "./Feeling";
 
 const clean = (s?: string): string | undefined => (s && s.trim() ? s.trim() : undefined);
 
@@ -106,21 +105,22 @@ const Group = ({ title, children, footer }: { title?: string; children: ReactNod
 // ------------------------------------------------------------ 足せる項目
 
 type FieldKey =
-  | "nickname" | "org" | "dept" | "title" | "w.report" | "w.contact" | "w.timing" | "w.evaluates" | "w.strengths" | "careers"
-  | "likes" | "dislikes" | "topics" | "values" | "learnings"
-  | "birthDate" | "deathDate" | "birthOrder" | "metDate" | "metHow" | "phone" | "email" | "sns" | "note";
+  | "org" | "dept" | "birthDate" | "birthOrder" | "deathDate" | "metHow"
+  | "phone" | "email" | "sns" | "address"
+  | "likes" | "dislikes" | "familyNote" | "recent" | "gifts"
+  | "nickname" | "note" | "custom";
 
 const SECTIONS: Array<{ title: string; keys: Array<[FieldKey, string]> }> = [
-  { title: "仕事", keys: [["org", "会社・組織"], ["dept", "部署"], ["title", "役職"], ["w.report", "報告・相談の好み"], ["w.contact", "連絡手段"], ["w.timing", "つかまる時間"], ["w.evaluates", "評価する点"], ["w.strengths", "得意・頼れる"], ["careers", "所属の履歴"]] },
-  { title: "取扱説明書", keys: [["likes", "好きなもの"], ["dislikes", "地雷"], ["topics", "盛り上がる話題"], ["values", "価値観・口ぐせ"], ["learnings", "学んだこと"]] },
-  { title: "誕生日・出会い", keys: [["birthDate", "誕生日"], ["birthOrder", "生まれ順"], ["metDate", "出会った日"], ["metHow", "きっかけ"], ["deathDate", "命日"]] },
-  { title: "連絡先", keys: [["phone", "電話"], ["email", "メール"], ["sns", "SNS など"]] },
-  { title: "その他", keys: [["nickname", "呼び名"], ["note", "メモ"]] },
+  { title: "仕事", keys: [["org", "会社"], ["dept", "部署"]] },
+  { title: "誕生日など", keys: [["birthDate", "誕生日"], ["birthOrder", "生まれ順"], ["deathDate", "命日"]] },
+  { title: "出会い", keys: [["metHow", "出会い"]] },
+  { title: "その人のこと", keys: [["likes", "好きなもの"], ["dislikes", "苦手・NG"], ["familyNote", "家族のこと"], ["recent", "近況"], ["gifts", "贈り物"]] },
+  { title: "連絡先", keys: [["phone", "電話"], ["email", "メール"], ["sns", "SNS など"], ["address", "住所"]] },
+  { title: "その他", keys: [["nickname", "呼び名"], ["note", "メモ"], ["custom", "自分で項目を作る"]] },
 ];
 
 const filled = (p: Person, k: FieldKey): boolean => {
-  if (k === "careers") return p.careers.length > 0;
-  if (k.startsWith("w.")) return !!p.work[k.slice(2) as keyof WorkManual];
+  if (k === "custom") return p.custom.length > 0;
   const v = p[k as keyof Person];
   return v !== undefined && v !== null && v !== "";
 };
@@ -154,8 +154,6 @@ export const PersonEdit = ({ id }: { id?: string }) => {
     return {
       org: uniq(ps.map((x) => x.org)),
       dept: uniq(ps.map((x) => x.dept)),
-      title: uniq(ps.map((x) => x.title)),
-      metHow: uniq(ps.map((x) => x.metHow)),
       tags: uniq(ps.flatMap((x) => x.tags)),
       familyName: uniq(ps.map((x) => x.familyName)),
     };
@@ -165,17 +163,16 @@ export const PersonEdit = ({ id }: { id?: string }) => {
   if (id && !original) return <div className="empty">見つかりません</div>;
 
   const set = <K extends keyof Person>(key: K, value: Person[K]): void => setP((cur) => ({ ...cur, [key]: value }));
-  const setWork = (key: keyof WorkManual, value: string): void => setP((cur) => ({ ...cur, work: { ...cur.work, [key]: value } }));
-  const setCareer = (cid: string, patch: Partial<Career>): void =>
-    setP((cur) => ({ ...cur, careers: cur.careers.map((c) => (c.id === cid ? { ...c, ...patch } : c)) }));
+  const setCustom = (cid: string, patch: Partial<CustomField>): void =>
+    setP((cur) => ({ ...cur, custom: cur.custom.map((c) => (c.id === cid ? { ...c, ...patch } : c)) }));
 
-  // 仕事の人は会社・部署・役職を最初から出す
+  // 仕事の人は会社・部署を最初から出す
   const isVisible = (k: FieldKey): boolean =>
-    filled(p, k) || added.includes(k) || (p.category === "work" && (k === "org" || k === "dept" || k === "title"));
+    filled(p, k) || added.includes(k) || (p.category === "work" && (k === "org" || k === "dept"));
   const add = (k: FieldKey): void => {
     setAdded((a) => [...a, k]);
     setJustAdded(k);
-    if (k === "careers") set("careers", [...p.careers, { id: newId(), org: p.org }]);
+    if (k === "custom") set("custom", [...p.custom, { id: newId(), label: "", value: "" }]);
   };
   const af = (k: FieldKey): boolean => justAdded === k;
 
@@ -208,7 +205,6 @@ export const PersonEdit = ({ id }: { id?: string }) => {
     }
     const pendingTag = tagDraft.trim();
     const tags = pendingTag && !p.tags.includes(pendingTag) ? [...p.tags, pendingTag] : p.tags;
-    const work: WorkManual = Object.fromEntries(Object.entries(p.work).map(([k, v]) => [k, clean(v)]).filter(([, v]) => v));
     const saved = await savePerson({
       ...p,
       name: fullName,
@@ -220,8 +216,9 @@ export const PersonEdit = ({ id }: { id?: string }) => {
       // 日本語入力の途中で切らないよう、入力中はそのまま持ち、保存時に 1 文字にする
       iconChar: clean(p.iconChar) ? [...clean(p.iconChar)!][0] : undefined,
       tags,
-      work,
-      careers: p.careers.filter((c) => c.org || c.dept || c.title || c.note),
+      custom: p.custom
+        .map((c) => ({ ...c, label: c.label.trim(), value: c.value.trim() }))
+        .filter((c) => c.label || c.value),
     });
     if (id) goBack(`/p/${saved.id}`);
     else navigate(`/p/${saved.id}`, true);
@@ -237,17 +234,12 @@ export const PersonEdit = ({ id }: { id?: string }) => {
     switch (k) {
       case "org": return <Row key={k} label={label} value={p.org} onChange={(v) => set("org", v)} list="dl-org" autoFocus={af(k)} />;
       case "dept": return <Row key={k} label={label} value={p.dept} onChange={(v) => set("dept", v)} list="dl-dept" autoFocus={af(k)} />;
-      case "title": return <Row key={k} label={label} value={p.title} onChange={(v) => set("title", v)} list="dl-title" autoFocus={af(k)} />;
-      case "w.report": return <AreaRow key={k} label={label} value={p.work.report} onChange={(v) => setWork("report", v)} placeholder="結論から短く / 数字で / 事前に一報" autoFocus={af(k)} />;
-      case "w.contact": return <Row key={k} label={label} value={p.work.contact} onChange={(v) => setWork("contact", v)} placeholder="電話 / Teams / 対面" autoFocus={af(k)} />;
-      case "w.timing": return <Row key={k} label={label} value={p.work.timing} onChange={(v) => setWork("timing", v)} placeholder="朝イチ / 昼休み明け" autoFocus={af(k)} />;
-      case "w.evaluates": return <AreaRow key={k} label={label} value={p.work.evaluates} onChange={(v) => setWork("evaluates", v)} autoFocus={af(k)} />;
-      case "w.strengths": return <AreaRow key={k} label={label} value={p.work.strengths} onChange={(v) => setWork("strengths", v)} autoFocus={af(k)} />;
-      case "likes": return <AreaRow key={k} label={label} value={p.likes} onChange={(v) => set("likes", v)} autoFocus={af(k)} />;
-      case "dislikes": return <AreaRow key={k} label={label} value={p.dislikes} onChange={(v) => set("dislikes", v)} autoFocus={af(k)} />;
-      case "topics": return <AreaRow key={k} label={label} value={p.topics} onChange={(v) => set("topics", v)} autoFocus={af(k)} />;
-      case "values": return <AreaRow key={k} label={label} value={p.values} onChange={(v) => set("values", v)} autoFocus={af(k)} />;
-      case "learnings": return <AreaRow key={k} label={label} value={p.learnings} onChange={(v) => set("learnings", v)} autoFocus={af(k)} />;
+      case "likes": return <AreaRow key={k} label={label} value={p.likes} onChange={(v) => set("likes", v)} placeholder="食べ物・お酒・趣味" autoFocus={af(k)} />;
+      case "dislikes": return <AreaRow key={k} label={label} value={p.dislikes} onChange={(v) => set("dislikes", v)} placeholder="苦手な物・触れないほうがいい話" autoFocus={af(k)} />;
+      case "familyNote": return <AreaRow key={k} label={label} value={p.familyNote} onChange={(v) => set("familyNote", v)} placeholder="奥さん〇〇さん・子ども2人・犬のポチ" autoFocus={af(k)} />;
+      case "recent": return <AreaRow key={k} label={label} value={p.recent} onChange={(v) => set("recent", v)} placeholder="引っ越した / 資格の勉強中" autoFocus={af(k)} />;
+      case "gifts": return <AreaRow key={k} label={label} value={p.gifts} onChange={(v) => set("gifts", v)} placeholder="あげた・もらった・あげたい物" autoFocus={af(k)} />;
+      case "address": return <AreaRow key={k} label={label} value={p.address} onChange={(v) => set("address", v)} autoFocus={af(k)} />;
       case "birthDate":
         return (
           <div key={k}>
@@ -262,33 +254,27 @@ export const PersonEdit = ({ id }: { id?: string }) => {
         return <Row key={k} label={label} type="number" inputMode="numeric" value={p.birthOrder ? String(p.birthOrder) : ""} placeholder="兄弟姉妹の何番目か（1＝長子）"
           onChange={(v) => set("birthOrder", v ? Number(v) : undefined)} autoFocus={af(k)} />;
       case "deathDate": return <Row key={k} label={label} type="date" value={p.deathDate} onChange={(v) => set("deathDate", v || undefined)} autoFocus={af(k)} />;
-      case "metDate": return <Row key={k} label={label} type="date" value={p.metDate} onChange={(v) => set("metDate", v)} autoFocus={af(k)} />;
-      case "metHow": return <Row key={k} label={label} value={p.metHow} onChange={(v) => set("metHow", v)} list="dl-met" placeholder="入社 / 小学校 / 紹介 など" autoFocus={af(k)} />;
+      case "metHow": return <AreaRow key={k} label={label} value={p.metHow} onChange={(v) => set("metHow", v)} placeholder="いつ・どこで・きっかけ（2020年 入社の同期 など）" autoFocus={af(k)} />;
       case "phone": return <Row key={k} label={label} type="tel" inputMode="tel" value={p.phone} onChange={(v) => set("phone", v)} autoFocus={af(k)} />;
       case "email": return <Row key={k} label={label} type="email" inputMode="email" value={p.email} onChange={(v) => set("email", v)} autoFocus={af(k)} />;
       case "sns": return <Row key={k} label={label} value={p.sns} onChange={(v) => set("sns", v)} placeholder="LINE / Instagram など" autoFocus={af(k)} />;
       case "nickname": return <Row key={k} label={label} value={p.nickname} onChange={(v) => set("nickname", v)} placeholder="みーちゃん など" autoFocus={af(k)} />;
       case "note": return <AreaRow key={k} label={label} value={p.note} onChange={(v) => set("note", v)} autoFocus={af(k)} />;
-      case "careers":
+      case "custom":
         return (
           <div key={k} className="frow-block">
-            <span className="frow-label">所属の履歴</span>
-            {p.careers.map((c) => (
-              <div key={c.id} className="career">
-                <div className="two">
-                  <input className="frow-input boxed" type="month" value={c.from ?? ""} onChange={(e) => setCareer(c.id, { from: e.target.value })} />
-                  <input className="frow-input boxed" type="month" value={c.to ?? ""} onChange={(e) => setCareer(c.id, { to: e.target.value })} />
-                </div>
-                <input className="frow-input boxed" list="dl-org" placeholder="会社・組織" value={c.org ?? ""} onChange={(e) => setCareer(c.id, { org: e.target.value })} />
-                <div className="two">
-                  <input className="frow-input boxed" list="dl-dept" placeholder="部署" value={c.dept ?? ""} onChange={(e) => setCareer(c.id, { dept: e.target.value })} />
-                  <input className="frow-input boxed" list="dl-title" placeholder="役職" value={c.title ?? ""} onChange={(e) => setCareer(c.id, { title: e.target.value })} />
-                </div>
-                <button type="button" className="text-btn small" style={{ alignSelf: "flex-end", color: "var(--danger)" }}
-                  onClick={() => set("careers", p.careers.filter((x) => x.id !== c.id))}>この行を消す</button>
+            {p.custom.map((c, n) => (
+              <div key={c.id} className="custom-row">
+                <input className="frow-input boxed custom-label" placeholder="項目名" value={c.label} autoFocus={af(k) && n === p.custom.length - 1}
+                  onChange={(e) => setCustom(c.id, { label: e.target.value })} />
+                <input className="frow-input boxed" placeholder="内容" value={c.value} onChange={(e) => setCustom(c.id, { value: e.target.value })} />
+                <button type="button" className="icon-btn" aria-label="この項目を消す" onClick={() => set("custom", p.custom.filter((x) => x.id !== c.id))}>
+                  <Icon name="close" size={14} />
+                </button>
               </div>
             ))}
-            <button type="button" className="text-btn small" onClick={() => set("careers", [...p.careers, { id: newId(), org: p.org }])}>＋ 履歴を足す</button>
+            <button type="button" className="text-btn small" style={{ alignSelf: "flex-start" }}
+              onClick={() => set("custom", [...p.custom, { id: newId(), label: "", value: "" }])}>＋ 項目を作る</button>
           </div>
         );
       default:
@@ -351,13 +337,6 @@ export const PersonEdit = ({ id }: { id?: string }) => {
             </label>
           )}
         </Group>
-
-        {/* ---- 自分からの気持ち */}
-        {!p.isSelf && (
-          <Group title="自分からの気持ち" footer="この欄は自分だけが見るもの。タップで選び、もう一度タップで解除">
-            <FeelingMeter bare person={p} onChange={(patch) => setP((cur) => ({ ...cur, ...patch }))} />
-          </Group>
-        )}
 
         {/* ---- グループ・タグ（タップで付け外し） */}
         <Group title="所属グループ" footer="会社・学校・部活など、どこの集まりにいるか">
@@ -437,8 +416,6 @@ export const PersonEdit = ({ id }: { id?: string }) => {
 
         <datalist id="dl-org">{suggest.org.map((x) => <option key={x} value={x} />)}</datalist>
         <datalist id="dl-dept">{suggest.dept.map((x) => <option key={x} value={x} />)}</datalist>
-        <datalist id="dl-title">{suggest.title.map((x) => <option key={x} value={x} />)}</datalist>
-        <datalist id="dl-met">{suggest.metHow.map((x) => <option key={x} value={x} />)}</datalist>
         <datalist id="dl-family">{suggest.familyName.map((x) => <option key={x} value={x} />)}</datalist>
       </main>
 

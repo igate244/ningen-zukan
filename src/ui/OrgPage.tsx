@@ -72,7 +72,6 @@ export const OrgPage = () => {
                       <Avatar person={p} size={34} />
                       <div className="row-main">
                         <div className="row-name">{p.name}</div>
-                        <div className="row-sub">{p.title ?? ""}</div>
                       </div>
                     </button>
                   ))}

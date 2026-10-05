@@ -48,6 +48,13 @@ export interface Favor {
   settled: boolean;
 }
 
+export interface CustomField {
+  id: string;
+  label: string;
+  value: string;
+}
+
+/** 以前の版にあった項目（読み込み時にメモへ移す） */
 export interface WorkManual {
   /** 報告・相談の好み（結論から / 細かく / 文書で など） */
   report?: string;
@@ -83,27 +90,12 @@ export interface Person extends Base {
   /** 写真が無いときのアイコンの文字（未設定なら名前の 1 文字目） */
   iconChar?: string;
   pinned?: boolean;
-  /** 自分からの好感度（1 嫌い〜5 大好き） */
-  like?: number;
-  /** 自分からの信頼度（1 不安〜5 すごく頼れる） */
-  trust?: number;
-  /** 尊敬（1〜5） */
-  respect?: number;
-  /** 一緒にいるときの居心地（1〜5） */
-  comfort?: number;
-  /** 価値観の近さ（1〜5） */
-  valueFit?: number;
-  /** 周りや自分の仕事への影響の大きさ（1〜5） */
-  influence?: number;
   /** 自分自身を表す特別な人物 */
   isSelf?: boolean;
 
-  // 現在の所属
+  // 仕事（ほかはメモに書く）
   org?: string;
   dept?: string;
-  title?: string;
-  /** 過去の所属・異動の履歴 */
-  careers: Career[];
 
   gender?: Gender;
   birthDate?: string; // YYYY-MM-DD
@@ -112,22 +104,29 @@ export interface Person extends Base {
   deathDate?: string;
   /** 兄弟姉妹の中で何番目に生まれたか（誕生日がわからないときの並び用） */
   birthOrder?: number;
-  metDate?: string;
+  /** 出会い（いつ・どこで・きっかけをまとめて 1 つのメモに） */
   metHow?: string;
 
   phone?: string;
   email?: string;
   sns?: string;
+  address?: string;
 
-  // 取扱説明書
+  // その人のこと
+  /** 好きなもの（食べ物・お酒・趣味） */
   likes?: string;
+  /** 苦手なもの・NG */
   dislikes?: string;
-  topics?: string;
-  values?: string;
-  work: WorkManual;
+  /** 家族のこと（パートナー・子ども・ペットの名前など） */
+  familyNote?: string;
+  /** 近況 */
+  recent?: string;
+  /** 贈り物（あげた・もらった・あげたい物） */
+  gifts?: string;
 
-  learnings?: string;
   note?: string;
+  /** 自分で足した項目 */
+  custom: CustomField[];
 
   /** 次に会ったときに話したいこと */
   nextTopics: CheckItem[];
@@ -153,7 +152,7 @@ export interface Relation extends Base {
   label?: string;
   labelBy?: string;
   note?: string;
-  /** 関係の温度 */
+  /** 関係の温度（今は使っていない。古いデータに残っているだけ） */
   mood?: Mood;
 }
 
@@ -224,7 +223,7 @@ export interface LogEntry extends Base {
   text: string;
   /** 毎年くり返す（結婚記念日など。イベントのときだけ使う） */
   yearly?: boolean;
-  /** そのときの印象 */
+  /** そのときの印象（今は使っていない。古いデータに残っているだけ） */
   impression?: Impression;
 }
 
@@ -233,29 +232,7 @@ export type Impression = (typeof IMPRESSIONS)[number];
 export const IMPRESSION_LABEL: Record<Impression, string> = { good: "よかった", neutral: "ふつう", bad: "いまいち" };
 export const IMPRESSION_ICON: Record<Impression, string> = { good: "😊", neutral: "😐", bad: "😞" };
 
-export const LIKE_LABEL = ["", "嫌い", "苦手", "ふつう", "好き", "大好き"];
-export const TRUST_LABEL = ["", "不安", "やや不安", "ふつう", "頼れる", "すごく頼れる"];
 
-export type FeelKey = "like" | "trust" | "respect" | "comfort" | "valueFit" | "influence";
-/** 自分から見たその人の 6 つの軸（レーダーチャートの並び順） */
-export const FEEL_AXES: Array<{ key: FeelKey; label: string; levels: string[] }> = [
-  { key: "like", label: "好意", levels: LIKE_LABEL },
-  { key: "trust", label: "信頼", levels: TRUST_LABEL },
-  { key: "respect", label: "尊敬", levels: ["", "しない", "あまり", "ふつう", "尊敬する", "とても尊敬"] },
-  { key: "comfort", label: "居心地", levels: ["", "悪い", "やや悪い", "ふつう", "良い", "とても良い"] },
-  { key: "valueFit", label: "価値観", levels: ["", "合わない", "ややずれる", "ふつう", "近い", "とても近い"] },
-  { key: "influence", label: "影響", levels: ["", "小さい", "やや小さい", "ふつう", "大きい", "とても大きい"] },
-];
-
-/** 好き × 信頼 の組み合わせから、付き合い方のタイプを一言で */
-export const feelingType = (like?: number, trust?: number): string | null => {
-  if (!like || !trust) return null;
-  if (like >= 4 && trust >= 4) return "好きで頼れる人";
-  if (like <= 2 && trust >= 4) return "苦手だけど頼れる人";
-  if (like >= 4 && trust <= 2) return "好きだけど任せると不安な人";
-  if (like <= 2 && trust <= 2) return "距離をおきたい人";
-  return null;
-};
 
 /** 画像の目録（同期対象）。実体の Blob は端末内の別テーブルにある */
 export interface ImageMeta extends Base {
@@ -301,25 +278,74 @@ export const emptyPerson = (name = ""): Person => {
     category: "work",
     tags: [],
     groups: [],
-    careers: [],
-    work: {},
+    custom: [],
     nextTopics: [],
     favors: [],
   };
 };
 
 /** 古い・欠けたデータを現在の形にそろえる（読み込み時に必ず通す） */
-export const normalizePerson = (raw: Partial<Person> & { id: string }): Person => ({
-  ...emptyPerson(),
-  ...raw,
-  tags: Array.isArray(raw.tags) ? raw.tags : [],
-  groups: Array.isArray(raw.groups) ? raw.groups : [],
-  careers: Array.isArray(raw.careers) ? raw.careers : [],
-  work: raw.work ?? {},
-  nextTopics: Array.isArray(raw.nextTopics) ? raw.nextTopics : [],
-  favors: Array.isArray(raw.favors) ? raw.favors : [],
-  category: (CATEGORIES as readonly string[]).includes(raw.category ?? "") ? (raw.category as Category) : "other",
-});
+export const normalizePerson = (raw: Partial<Person> & { id: string }): Person => {
+  const p: Person = {
+    ...emptyPerson(),
+    ...raw,
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    groups: Array.isArray(raw.groups) ? raw.groups : [],
+    custom: Array.isArray(raw.custom) ? raw.custom : [],
+    nextTopics: Array.isArray(raw.nextTopics) ? raw.nextTopics : [],
+    favors: Array.isArray(raw.favors) ? raw.favors : [],
+    category: (CATEGORIES as readonly string[]).includes(raw.category ?? "") ? (raw.category as Category) : "other",
+  };
+  return migrateLegacy(p, raw as LegacyPerson);
+};
+
+/** 以前の版の項目 */
+interface LegacyPerson {
+  title?: string;
+  careers?: Career[];
+  work?: WorkManual;
+  topics?: string;
+  values?: string;
+  learnings?: string;
+  metDate?: string;
+  like?: number; trust?: number; respect?: number; comfort?: number; valueFit?: number; influence?: number;
+}
+const LEGACY_KEYS = ["title", "careers", "work", "topics", "values", "learnings", "metDate", "like", "trust", "respect", "comfort", "valueFit", "influence"] as const;
+
+/**
+ * 項目を整理したときの引っ越し。消えた項目に書いてあった文章は、見出しを付けてメモの末尾に移す（消さない）。
+ * 何度通しても同じ結果になる（移したあとの元の項目は取り除く）。
+ */
+const migrateLegacy = (p: Person, raw: LegacyPerson): Person => {
+  if (!LEGACY_KEYS.some((k) => k in raw)) return p;
+  const lines: string[] = [];
+  const add = (label: string, v?: string): void => {
+    if (v && v.trim()) lines.push(`【${label}】${v.trim()}`);
+  };
+  add("役職", raw.title);
+  for (const c of raw.careers ?? []) {
+    const what = [c.org, c.dept, c.title, c.note].filter(Boolean).join(" ");
+    if (what) add("所属の履歴", `${c.from ?? "?"}〜${c.to ?? ""} ${what}`);
+  }
+  const w = raw.work ?? {};
+  add("報告・相談の好み", w.report);
+  add("連絡手段", w.contact);
+  add("つかまる時間", w.timing);
+  add("評価する点", w.evaluates);
+  add("得意・頼れる", w.strengths);
+  add("盛り上がる話題", raw.topics);
+  add("価値観・口ぐせ", raw.values);
+  add("学んだこと", raw.learnings);
+  const out = { ...p } as Person & LegacyPerson;
+  if (lines.length) out.note = [p.note?.trim(), ...lines].filter(Boolean).join("\n");
+  if (raw.metDate) {
+    const [y, m, d] = raw.metDate.split("-").map(Number);
+    const when = y ? `${y}年${m}月${d}日` : raw.metDate;
+    out.metHow = p.metHow ? `${when} ${p.metHow}` : when;
+  }
+  for (const k of LEGACY_KEYS) delete out[k];
+  return out;
+};
 
 /** 表示名（自分は「名前（自分）」、名前が未設定なら「自分」） */
 export const selfLabel = (p: Pick<Person, "name" | "isSelf">): string =>

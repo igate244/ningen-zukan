@@ -89,50 +89,14 @@ const Toggle = ({ t, onToggle }: { t: GToggle; onToggle: (t: GToggle) => void })
   </g>
 );
 
-/** 線を点の列にする（弧は細かく区切る） */
-const sampleEdge = (e: GEdge): Array<[number, number]> => {
-  if (!e.control) return e.points;
-  const [p0, p2] = [e.points[0], e.points[e.points.length - 1]];
-  const c = e.control;
-  const out: Array<[number, number]> = [];
-  for (let i = 0; i <= 24; i++) {
-    const t = i / 24;
-    const u = 1 - t;
-    out.push([u * u * p0[0] + 2 * u * t * c[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * c[1] + t * t * p2[1]]);
-  }
-  return out;
-};
-
-/** 点の列をギザギザにする（険悪の線） */
-const zigzag = (pts: Array<[number, number]>): Array<[number, number]> => {
-  const out: Array<[number, number]> = [pts[0]];
-  let flip = 1;
-  for (let i = 1; i < pts.length; i++) {
-    const [x1, y1] = pts[i - 1];
-    const [x2, y2] = pts[i];
-    const len = Math.hypot(x2 - x1, y2 - y1);
-    const steps = Math.max(1, Math.floor(len / 7));
-    const nx = -(y2 - y1) / (len || 1);
-    const ny = (x2 - x1) / (len || 1);
-    for (let k = 1; k <= steps; k++) {
-      const t = k / steps;
-      const amp = k === steps && i === pts.length - 1 ? 0 : 3.5 * flip;
-      out.push([x1 + (x2 - x1) * t + nx * amp, y1 + (y2 - y1) * t + ny * amp]);
-      flip = -flip;
-    }
-  }
-  return out;
-};
-
 export const GraphView = ({
-  graph, centerId, onTap, height, onToggle, showMood = true,
+  graph, centerId, onTap, height, onToggle,
 }: {
   graph: Graph;
   centerId: string;
   onTap: (id: string) => void;
   height: number | string;
   onToggle?: (t: GToggle) => void;
-  showMood?: boolean;
 }) => {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 360, h: 400 });
@@ -244,10 +208,10 @@ export const GraphView = ({
               const [[x1, y1], [x2, y2]] = e.points;
               const mx = (x1 + x2) / 2;
               const my = (y1 + y2) / 2;
-              const sc = showMood && e.mood === "bad" ? "var(--danger)" : st.color;
-              const sw = showMood && e.mood === "close" ? 3 : 2;
+              const sc = st.color;
+              const sw = 2;
               return (
-                <g key={e.id} opacity={e.faint ? 0.22 : 1} strokeDasharray={showMood && e.mood === "cool" ? "2 5" : undefined}>
+                <g key={e.id} opacity={e.faint ? 0.22 : 1}>
                   <line x1={x1} y1={y1 - 3} x2={x2} y2={y2 - 3} stroke={sc} strokeWidth={sw} />
                   <line x1={x1} y1={y1 + 3} x2={x2} y2={y2 + 3} stroke={sc} strokeWidth={sw} />
                   {e.kind === "exspouse" && (
@@ -259,21 +223,14 @@ export const GraphView = ({
                 </g>
               );
             }
-            // 線の温度（仲良し＝太線、微妙＝点線、険悪＝赤のギザギザ）
-            const mood = showMood ? e.mood : undefined;
-            const pts = sampleEdge(e);
-            if (mood === "bad") {
-              return <polyline key={e.id} points={zigzag(pts).map((p) => p.join(",")).join(" ")} fill="none" stroke="var(--danger)"
-                strokeWidth={1.8} opacity={e.faint ? 0.35 : 1} strokeLinejoin="round" />;
-            }
-            const width = mood === "close" ? st.width + 2.5 : st.width;
-            const dash = mood === "cool" ? "2 6" : st.dash;
+            const width = st.width;
+            const dash = st.dash;
             const d = e.control
               ? `M${e.points[0].join(",")} Q${e.control.join(",")} ${e.points[e.points.length - 1].join(",")}`
               : `M${e.points.map((p) => p.join(",")).join(" L")}`;
             return (
               <path key={e.id} d={d} fill="none" stroke={st.color} strokeWidth={width} strokeDasharray={dash}
-                opacity={e.faint ? 0.22 : mood === "cool" ? 0.75 : 1} strokeLinejoin="round" strokeLinecap="round" />
+                opacity={e.faint ? 0.22 : 1} strokeLinejoin="round" strokeLinecap="round" />
             );
           })}
           {graph.nodes.map((n) => (
@@ -292,14 +249,6 @@ export const GraphView = ({
     </div>
   );
 };
-
-export const MoodLegend = () => (
-  <div className="graph-legend">
-    <span><i style={{ background: "var(--text-2)", height: 5 }} />仲良し</span>
-    <span><i className="dot" style={{ background: "repeating-linear-gradient(90deg, var(--text-2) 0 2px, transparent 2px 6px)" }} />微妙</span>
-    <span><i style={{ background: "none", borderTop: "2px dashed var(--danger)", height: 0 }} />険悪</span>
-  </div>
-);
 
 export const GraphLegend = ({ family }: { family?: boolean }) => (
   <div className="graph-legend">

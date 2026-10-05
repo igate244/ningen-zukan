@@ -1,17 +1,15 @@
-// src/ui/PersonDetail.tsx — 1 人のページ（概要 / 取説 / 記録 / つながり）
+// src/ui/PersonDetail.tsx — 1 人のページ（概要 / 覚え書き / 記録 / つながり）
 
 import { type ReactNode, useMemo, useState } from "react";
 import { age, ageAtDeath, daysToBirthday, formatDate, formatMonthDay, sinceLabel, today } from "../dates";
 import {
   CATEGORY_LABEL, type CheckItem, type Favor, GENDER_LABEL, LOG_KIND_LABEL, type Person, RELATION_CHOICES, type RelType,
-  newId, type Mood, MOODS, MOOD_LABEL, type Relation, relationLabelFrom, selfLabel,
+  newId, type Relation, relationLabelFrom, selfLabel,
 } from "../model";
 import { navigate } from "../router";
 import { alive, deleteRelation, lastMetMap, saveRelation, savePerson, useData } from "../store";
 import { Avatar, Field, Icon, PersonPicker, TopBar } from "./common";
 import { GraphView } from "./GraphView";
-import { RelationRadar } from "./Radar";
-import { IMPRESSION_ICON, IMPRESSION_LABEL } from "../model";
 import { buildCombined } from "../graph";
 import {
   childLabel, childrenOf, exSpousesOf, familyIndex, kinLabel, parentLabel, parentsOf, siblingLabel, siblingsOf,
@@ -19,7 +17,7 @@ import {
 } from "../family";
 
 type Tab = "info" | "manual" | "logs" | "links";
-const TAB_LABEL: Record<Tab, string> = { info: "概要", manual: "取説", logs: "記録", links: "つながり" };
+const TAB_LABEL: Record<Tab, string> = { info: "概要", manual: "覚え書き", logs: "記録", links: "つながり" };
 const lastTab = new Map<string, Tab>();
 
 const KV = ({ items }: { items: Array<[string, ReactNode | undefined, boolean?]> }) => {
@@ -47,13 +45,6 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
   };
 
   const lastMet = useMemo(() => lastMetMap(data).get(id), [data, id]);
-  // この人との記録に付けた印象（新しい順に 8 件、左が古い）
-  const recentImpressions = useMemo(
-    () => alive(data.logs).filter((l) => l.impression && l.personIds.includes(id))
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt).slice(0, 8).reverse(),
-    [data.logs, id],
-  );
-
   if (!person) {
     return (
       <>
@@ -63,7 +54,7 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
     );
   }
 
-  const sub = [person.org, person.dept, person.title].filter(Boolean).join(" ・ ");
+  const sub = [person.org, person.dept].filter(Boolean).join(" ・ ");
 
   return (
     <>
@@ -98,19 +89,6 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
             {lastMet && <span className="badge">最後の記録 {sinceLabel(lastMet)}</span>}
           </div>
         </div>
-
-        {!person.isSelf && (
-          <>
-            {recentImpressions.length > 0 && (
-              <div className="feel-recent" style={{ justifyContent: "center", borderTop: "none" }}>
-                最近の印象
-                {recentImpressions.map((l) => (
-                  <span key={l.id} className="i" title={`${l.date} ${IMPRESSION_LABEL[l.impression!]}`}>{IMPRESSION_ICON[l.impression!]}</span>
-                ))}
-              </div>
-            )}
-          </>
-        )}
 
         <div className="actions">
           <button type="button" className="btn primary" onClick={() => navigate(`/log/new?p=${id}`)}>
@@ -150,47 +128,26 @@ const InfoTab = ({ person: p }: { person: Person }) => {
         until !== null ? ` ・ ${until === 0 ? "今日！" : `あと${until}日`}` : ""
       }`
     : undefined;
-  const empty = !birth && !p.metDate && !p.metHow && !p.phone && !p.email && !p.sns && !p.note && p.careers.length === 0;
+  const empty = !birth && !p.metHow && !p.phone && !p.email && !p.sns && !p.address && !p.note && p.custom.length === 0;
 
   return (
     <>
-      {!p.isSelf && (
-        <div className="section">
-          <div className="section-title">自分から見たこの人</div>
-          <RelationRadar person={p} />
-        </div>
-      )}
       <FamilySection person={p} />
       <div className="section">
         <KV
           items={[
             ["誕生日", birth],
             ["命日", death],
-            ["出会い", [p.metDate ? formatDate(p.metDate) : "", p.metHow].filter(Boolean).join(" ・ ") || undefined],
+            ["出会い", p.metHow],
             ["電話", p.phone ? <a href={`tel:${p.phone}`}>{p.phone}</a> : undefined],
             ["メール", p.email ? <a href={`mailto:${p.email}`}>{p.email}</a> : undefined],
-            ["SNS・その他", p.sns],
+            ["SNS など", p.sns],
+            ["住所", p.address],
+            ...p.custom.map((c): [string, ReactNode] => [c.label || "（項目名なし）", c.value]),
             ["メモ", p.note],
           ]}
         />
       </div>
-      {p.careers.length > 0 && (
-        <div className="section">
-          <div className="section-title">所属の履歴</div>
-          <div className="kv card">
-            {[...p.careers]
-              .sort((x, y) => (y.from ?? "").localeCompare(x.from ?? ""))
-              .map((c) => (
-                <div className="kv-item" key={c.id}>
-                  <div className="kv-label">
-                    {c.from ?? "?"} 〜 {c.to ?? ""}
-                  </div>
-                  <div className="kv-value">{[c.org, c.dept, c.title].filter(Boolean).join(" ・ ")}</div>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
       {empty && <div className="empty">右上の編集ボタンから情報を足せます</div>}
     </>
   );
@@ -311,7 +268,7 @@ const FamilySection = ({ person: p }: { person: Person }) => {
   );
 };
 
-// ---------------------------------------------------------------------- 取説
+// ---------------------------------------------------------------------- 覚え書き
 
 const ManualTab = ({ person: p }: { person: Person }) => {
   const [topic, setTopic] = useState("");
@@ -339,7 +296,7 @@ const ManualTab = ({ person: p }: { person: Person }) => {
   return (
     <>
       <div className="section">
-        <div className="section-title">次に話すこと</div>
+        <div className="section-title">次に話すこと・約束</div>
         <div className="card">
           {[...openTopics, ...doneTopics].map((t) => (
             <div className="check-row" key={t.id}>
@@ -353,7 +310,7 @@ const ManualTab = ({ person: p }: { person: Person }) => {
             </div>
           ))}
           <form className="inline-add" onSubmit={(e) => { e.preventDefault(); addTopic(); }}>
-            <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="話したいこと・聞きたいことを追加" />
+            <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="話したいこと・約束を追加" />
             <button type="submit" className="text-btn" disabled={!topic.trim()}>追加</button>
           </form>
         </div>
@@ -362,35 +319,17 @@ const ManualTab = ({ person: p }: { person: Person }) => {
       <div className="section">
         <KV
           items={[
-            ["喜ぶこと・好きなもの", p.likes],
-            ["地雷・避けたいこと", p.dislikes, true],
-            ["盛り上がる話題", p.topics],
-            ["価値観・口ぐせ", p.values],
+            ["好きなもの", p.likes],
+            ["苦手・NG", p.dislikes, true],
+            ["家族のこと", p.familyNote],
+            ["近況", p.recent],
+            ["贈り物", p.gifts],
           ]}
         />
+        {!p.likes && !p.dislikes && !p.familyNote && !p.recent && !p.gifts && (
+          <div className="small muted" style={{ padding: "6px 4px" }}>好きなもの・苦手・家族のこと・近況・贈り物は、右上の編集から足せます</div>
+        )}
       </div>
-
-      {Object.values(p.work).some(Boolean) && (
-        <div className="section">
-          <div className="section-title">仕事の取説</div>
-          <KV
-            items={[
-              ["報告・相談の好み", p.work.report],
-              ["通じやすい連絡手段", p.work.contact],
-              ["つかまりやすい時間", p.work.timing],
-              ["何を評価する人か", p.work.evaluates],
-              ["得意なこと・頼れること", p.work.strengths],
-            ]}
-          />
-        </div>
-      )}
-
-      {p.learnings && (
-        <div className="section">
-          <div className="section-title">この人から学んだこと</div>
-          <KV items={[["", p.learnings]]} />
-        </div>
-      )}
 
       <div className="section">
         <div className="section-title">貸し借り・頼まれごと</div>
@@ -519,7 +458,7 @@ const LinksTab = ({ person }: { person: Person }) => {
                   <Avatar person={other} size={36} />
                   <div className="row-main">
                     <div className="row-name">{other.isSelf ? "自分" : other.name}</div>
-                    <div className="row-sub">{(r.labelBy === person.id ? r.label : undefined) ?? kinLabel(fx, person.id, other.id) ?? relationLabelFrom(r, person.id)}{r.mood && r.mood !== "normal" ? ` ・ ${MOOD_LABEL[r.mood]}` : ""}{r.note ? ` ・ ${r.note}` : ""}</div>
+                    <div className="row-sub">{(r.labelBy === person.id ? r.label : undefined) ?? kinLabel(fx, person.id, other.id) ?? relationLabelFrom(r, person.id)}{r.note ? ` ・ ${r.note}` : ""}</div>
                   </div>
                 </button>
                 <button type="button" className="icon-btn" aria-label="つながりを編集" onClick={() => setEditing(r)}>
@@ -564,14 +503,13 @@ const RelationEditSheet = ({ rel, viewerId, onClose }: { rel: Relation; viewerId
   const [choice, setChoice] = useState(choiceOf(rel, viewerId));
   const [label, setLabel] = useState(rel.labelBy === viewerId ? (rel.label ?? "") : "");
   const [note, setNote] = useState(rel.note ?? "");
-  const [mood, setMood] = useState<Mood | undefined>(rel.mood);
   const [picking, setPicking] = useState(false);
   const other = data.persons.find((p) => p.id === otherId);
 
   const save = async (): Promise<void> => {
     const c = RELATION_CHOICES.find((x) => x.key === choice) ?? RELATION_CHOICES[0];
     const [a, b] = c.otherIsA ? [otherId, viewerId] : [viewerId, otherId];
-    await saveRelation({ ...rel, a, b, type: c.type, label: label.trim() || undefined, labelBy: label.trim() ? viewerId : undefined, note: note.trim() || undefined, mood });
+    await saveRelation({ ...rel, a, b, type: c.type, label: label.trim() || undefined, labelBy: label.trim() ? viewerId : undefined, note: note.trim() || undefined, mood: undefined });
     onClose();
   };
   const remove = async (): Promise<void> => {
@@ -604,15 +542,6 @@ const RelationEditSheet = ({ rel, viewerId, onClose }: { rel: Relation; viewerId
                 {RELATION_CHOICES.map((c) => (
                   <button type="button" key={c.key} className={`chip ${choice === c.key ? "on" : ""}`} onClick={() => setChoice(c.key)}>
                     {c.label}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label="関係の温度">
-              <div className="chips" style={{ paddingTop: 0, flexWrap: "wrap" }}>
-                {MOODS.map((m) => (
-                  <button type="button" key={m} className={`chip mood-${m} ${mood === m ? "on" : ""}`} onClick={() => setMood(mood === m ? undefined : m)}>
-                    {MOOD_LABEL[m]}
                   </button>
                 ))}
               </div>

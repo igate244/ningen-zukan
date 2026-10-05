@@ -5,7 +5,7 @@
 //   家系図（family）: 親子・夫婦・兄弟のつながりだけをたどり、世代ごとに横一列に並べる
 
 import { childrenOf, compareAge, exSpousesOf, familyIndex, kinLabel, parentsOf, siblingsOf, sortByAge, spousesOf } from "./family";
-import { type AppData, type Mood, type Person, type Relation, type RelType, SELF_ID as SELF_ID_FOR_GRAPH, relationLabelFrom } from "./model";
+import { type AppData, type Person, type Relation, type RelType, SELF_ID as SELF_ID_FOR_GRAPH, relationLabelFrom } from "./model";
 
 export interface GNode {
   id: string;
@@ -29,8 +29,6 @@ export interface GEdge {
   faint?: boolean;
   /** 弧を描くときの制御点（2 次ベジェ）。間にいる人をよけるため */
   control?: [number, number];
-  /** 関係の温度（直接のつながりの線だけ） */
-  mood?: Mood;
 }
 
 /** 家系図の「開く・たたむ」ボタン */
@@ -513,7 +511,7 @@ export const buildFamily = (
     const b = pos.get(r.b)!;
     if (a.y !== b.y) continue;
     const [l, rr] = a.x < b.x ? [a, b] : [b, a];
-    edges.push({ id: r.id, rel: r, kind: r.type === "exspouse" ? "exspouse" : "spouse", points: [[l.x + NODE_R, l.y], [rr.x - NODE_R, rr.y]], mood: r.mood });
+    edges.push({ id: r.id, rel: r, kind: r.type === "exspouse" ? "exspouse" : "spouse", points: [[l.x + NODE_R, l.y], [rr.x - NODE_R, rr.y]] });
   }
   // 親子：両親がそろっていれば夫婦の線の真ん中から、片親なら親の真下から下ろす。
   // 同じ親の組の子は一本の横線にまとめ、親の組ごとに横線の高さを変える
@@ -760,9 +758,8 @@ export const buildCombined = (data: AppData, centerId: string, maxDepth: 1 | 2, 
     }
     edges.push({
       id: r.id, rel: r, kind: edgeKind(r.type), points: [[a.x, a.y], [b.x, b.y]],
-      faint: r.a !== centerId && r.b !== centerId && a.depth !== 1 && b.depth !== 1 && !r.mood,
+      faint: r.a !== centerId && r.b !== centerId && a.depth !== 1 && b.depth !== 1,
       control,
-      mood: r.mood,
     });
   }
 
@@ -783,7 +780,7 @@ export const buildCombined = (data: AppData, centerId: string, maxDepth: 1 | 2, 
 
 // ===================================================================== グループの図
 //
-// メンバーを円に並べて、メンバーどうしのつながり（温度つき）を線で結ぶ。自分が入っていれば真ん中。
+// メンバーを円に並べて、メンバーどうしのつながりを線で結ぶ。自分が入っていれば真ん中。
 
 export const buildGroup = (data: AppData, groupId: string): Graph => {
   const { persons, rels } = aliveIndex(data);
@@ -807,7 +804,7 @@ export const buildGroup = (data: AppData, groupId: string): Graph => {
       const b = pos.get(r.b)!;
       const kind = edgeKind(r.type);
       // 夫婦の二重線は家系図向けなので、ここでは普通の線にする
-      return { id: r.id, rel: r, kind: kind === "spouse" || kind === "exspouse" ? "family" : kind, points: [[a.x, a.y], [b.x, b.y]] as Array<[number, number]>, mood: r.mood };
+      return { id: r.id, rel: r, kind: kind === "spouse" || kind === "exspouse" ? "family" : kind, points: [[a.x, a.y], [b.x, b.y]] as Array<[number, number]> };
     });
   // 呼び名：自分が入っていれば自分から見た関係
   if (centerIn) for (const n of nodes) {
@@ -907,8 +904,8 @@ export const buildScoped = (data: AppData, centerId: string, scope: "work" | "pr
   const count = new Map<string, number>();
   for (const { id } of ring1) for (const g of persons.get(id)!.groups) if (groups.has(g)) count.set(g, (count.get(g) ?? 0) + 1);
   const bucketOf = new Map<string, string>();
-  // 上司・部下と、温度を付けた相手は丸にしまわず、いつも見えるようにする
-  const keepOut = (r?: Relation): boolean => !!r && (r.type === "boss" || !!r.mood);
+  // 上司・部下は丸にしまわず、いつも見えるようにする
+  const keepOut = (r?: Relation): boolean => !!r && r.type === "boss";
   for (const { id, r } of ring1) {
     if (keepOut(r)) continue;
     const gs = persons.get(id)!.groups.filter((g) => groups.has(g));
@@ -1040,8 +1037,7 @@ export const buildScoped = (data: AppData, centerId: string, scope: "work" | "pr
     edges.push({
       id: r.id, rel: r, kind: k === "spouse" || k === "exspouse" ? "family" : k,
       points: [[a.x, a.y], [b.x, b.y]],
-      faint: !isTree && !r.mood,
-      mood: r.a === centerId || r.b === centerId || r.mood ? r.mood : undefined,
+      faint: !isTree,
     });
   }
   edges.sort((x, y) => Number(!!y.faint) - Number(!!x.faint));

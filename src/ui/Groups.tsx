@@ -6,7 +6,7 @@ import { GROUP_KINDS, GROUP_KIND_LABEL, type Group, type GroupKind, newId, selfL
 import { navigate } from "../router";
 import { alive, deleteGroup, saveGroup, setGroupMembers, useData } from "../store";
 import { Avatar, Field, Icon, PersonPicker, TopBar } from "./common";
-import { GraphView, MoodLegend } from "./GraphView";
+import { GraphView } from "./GraphView";
 import { OrgPage } from "./OrgPage";
 
 // ------------------------------------------------------------------ 一覧
@@ -171,9 +171,8 @@ export const GroupDetail = ({ id }: { id: string }) => {
             <div className="graph-box framed">
               <GraphView graph={graph} centerId="me" height={340} onTap={(pid) => navigate(`/p/${pid}`)} />
             </div>
-            <div style={{ marginTop: 6 }}><MoodLegend /></div>
             <div className="small muted" style={{ marginTop: 4 }}>
-              メンバーどうしの関係は、各人のページの「つながり」で足せます（仲良し・険悪などの温度も）。
+              メンバーどうしの関係は、各人のページの「つながり」で足せます。
             </div>
           </div>
         )}
@@ -185,7 +184,7 @@ export const GroupDetail = ({ id }: { id: string }) => {
               <Avatar person={p} size={36} />
               <div className="row-main">
                 <div className="row-name">{selfLabel(p)}</div>
-                <div className="row-sub">{[p.org, p.dept, p.title].filter(Boolean).join(" ・ ")}</div>
+                <div className="row-sub">{[p.org, p.dept].filter(Boolean).join(" ・ ")}</div>
               </div>
             </button>
           ))}
