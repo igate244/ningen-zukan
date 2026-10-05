@@ -17,7 +17,7 @@ import {
 } from "../model";
 import { goBack, navigate } from "../router";
 import { addImage, alive, deleteGroup, deletePerson, deleteTag, getData, savePerson, useData } from "../store";
-import { Avatar, Icon, TopBar } from "./common";
+import { Avatar, Icon, TopBar, personSub } from "./common";
 import { GroupEditSheet } from "./Groups";
 
 const clean = (s?: string): string | undefined => (s && s.trim() ? s.trim() : undefined);
@@ -207,6 +207,15 @@ export const PersonEdit = ({ id }: { id?: string }) => {
       setError("姓か名を入れてください");
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
+    }
+    // 同じ名前の人がもういないか（新しく登録するとき・名前を変えたとき）
+    const norm = (x: string): string => x.replace(/[\s\u3000]+/g, "");
+    if (!original || norm(original.name) !== norm(fullName)) {
+      const same = alive(data.persons).filter((x) => x.id !== p.id && norm(x.name) === norm(fullName));
+      if (same.length) {
+        const who = same.map((x) => `・${x.name}（${personSub(x, groups) || "情報なし"}）`).join("\n");
+        if (!window.confirm(`同じ名前の人がもう登録されています。\n${who}\n\n別の人として登録しますか？`)) return;
+      }
     }
     const pendingTag = tagDraft.trim();
     const tags = pendingTag && !p.tags.includes(pendingTag) ? [...p.tags, pendingTag] : p.tags;

@@ -2,7 +2,7 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 import { useImageUrl } from "../image";
-import { type Person, iconCharOf, selfLabel } from "../model";
+import { type AppData, CATEGORY_LABEL, type Person, iconCharOf, selfLabel } from "../model";
 import { goBack } from "../router";
 import { alive, useData } from "../store";
 
@@ -76,6 +76,17 @@ export const Field = ({ label, hint, children }: { label: string; hint?: string;
   </div>
 );
 
+// ------------------------------------------------------------- 人の補足
+
+/** 名前の下に出す一言（同じ名前の人を見分けられるよう、会社・部署 → グループ → 区分の順で） */
+export const personSub = (p: Person, groups: AppData["groups"]): string => {
+  const work = [p.org, p.dept].filter(Boolean).join(" ・ ");
+  if (work) return work;
+  const gs = p.groups.map((id) => groups.find((g) => g.id === id && !g.deleted)?.name).filter(Boolean);
+  if (gs.length) return gs.join(" ・ ");
+  return p.isSelf ? "" : CATEGORY_LABEL[p.category];
+};
+
 // ------------------------------------------------------------- 人を選ぶシート
 
 export const PersonPicker = ({
@@ -92,14 +103,41 @@ export const PersonPicker = ({
   const data = useData();
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<string[]>(selected);
+  const [group, setGroup] = useState("");
+  const groups = useMemo(() => alive(data.groups ?? []), [data.groups]);
 
-  const people = useMemo(() => {
+  // 最近よく記録している人（直近 90 日の回数、同じなら新しい順）
+  const recentScore = useMemo(() => {
+    const m = new Map<string, { n: number; last: string }>();
+    const since = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+    for (const l of alive(data.logs)) {
+      for (const id of l.personIds) {
+        const cur = m.get(id) ?? { n: 0, last: "" };
+        m.set(id, { n: cur.n + (l.date >= since ? 1 : 0), last: l.date > cur.last ? l.date : cur.last });
+      }
+    }
+    return m;
+  }, [data.logs]);
+
+  const { top, rest } = useMemo(() => {
     const query = q.trim().toLowerCase();
-    return alive(data.persons)
+    const gName = (p: Person): string[] => p.groups.map((id) => groups.find((g) => g.id === id)?.name ?? "");
+    const all = alive(data.persons)
       .filter((p) => (includeSelf || !p.isSelf) && !excludeIds.includes(p.id))
-      .filter((p) => !query || [p.name, p.kana, p.nickname, p.org, p.dept].some((s) => s?.toLowerCase().includes(query)))
+      .filter((p) => !group || p.groups.includes(group))
+      .filter((p) => !query || [p.name, p.kana, p.nickname, p.org, p.dept, ...p.tags, ...gName(p)].some((s) => s?.toLowerCase().includes(query)))
       .sort((a, b) => (a.isSelf ? -1 : b.isSelf ? 1 : (a.kana || a.name).localeCompare(b.kana || b.name, "ja")));
-  }, [data.persons, q, excludeIds, includeSelf]);
+    // 検索やグループで絞っていないときは、選択中・重要・最近の人を上に出す
+    if (query || group) return { top: [] as Person[], rest: all };
+    const score = (p: Person): number => {
+      const r = recentScore.get(p.id);
+      return (selected.includes(p.id) ? 1000 : 0) + (p.pinned ? 100 : 0) + (r ? r.n * 5 + 1 : 0);
+    };
+    const top = all.filter((p) => !p.isSelf && score(p) > 0)
+      .sort((a, b) => score(b) - score(a) || (recentScore.get(b.id)?.last ?? "").localeCompare(recentScore.get(a.id)?.last ?? ""))
+      .slice(0, 12);
+    return { top, rest: all.filter((p) => !top.includes(p)) };
+  }, [data.persons, q, group, groups, excludeIds, includeSelf, recentScore, selected]);
 
   const toggle = (id: string): void => {
     if (!multiple) {
@@ -124,23 +162,38 @@ export const PersonPicker = ({
             </button>
           )}
         </div>
-        <input className="search" placeholder="名前・所属で検索" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="sheet-body">
-          <div className="list card">
-            {people.length === 0 && <div className="empty">該当する人がいません</div>}
-            {people.map((p) => (
-              <button type="button" key={p.id} className="row" onClick={() => toggle(p.id)}>
-                <Avatar person={p} size={34} />
-                <div className="row-main">
-                  <div className="row-name">{selfLabel(p)}</div>
-                  <div className="row-sub">{[p.org, p.dept].filter(Boolean).join(" ・ ")}</div>
-                </div>
-                {multiple && (
-                  <input type="checkbox" readOnly checked={picked.includes(p.id)} style={{ width: 18, height: 18, accentColor: "var(--accent)" }} />
-                )}
-              </button>
+        <input className="search" placeholder="名前・所属・グループで検索" value={q} onChange={(e) => setQ(e.target.value)} />
+        {groups.length > 0 && (
+          <div className="chips">
+            <button type="button" className={`chip ${!group ? "on" : ""}`} onClick={() => setGroup("")}>すべて</button>
+            {groups.map((g) => (
+              <button type="button" key={g.id} className={`chip ${group === g.id ? "on" : ""}`} onClick={() => setGroup(group === g.id ? "" : g.id)}>{g.name}</button>
             ))}
           </div>
+        )}
+        <div className="sheet-body">
+          {top.length === 0 && rest.length === 0 && <div className="empty">該当する人がいません</div>}
+          {[{ label: "最近・重要", list: top }, { label: top.length ? "すべて" : "", list: rest }].map(({ label, list }) =>
+            list.length === 0 ? null : (
+              <div key={label || "all"}>
+                {label && <div className="picker-head">{label}</div>}
+                <div className="list card">
+                  {list.map((p) => (
+                    <button type="button" key={p.id} className="row" onClick={() => toggle(p.id)}>
+                      <Avatar person={p} size={34} />
+                      <div className="row-main">
+                        <div className="row-name">{selfLabel(p)}</div>
+                        <div className="row-sub">{personSub(p, groups)}</div>
+                      </div>
+                      {multiple && (
+                        <input type="checkbox" readOnly checked={picked.includes(p.id)} style={{ width: 18, height: 18, accentColor: "var(--accent)" }} />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ),
+          )}
         </div>
       </div>
     </div>

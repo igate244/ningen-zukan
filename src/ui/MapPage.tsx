@@ -12,7 +12,7 @@ type Mode = Scope;
 const MODES: Mode[] = ["kin", "work", "private"];
 
 // 画面を離れても最後に見ていた状態を覚えておく
-const memo = { center: SELF_ID, mode: "work" as Mode, depth: 2 as 1 | 2, collapse: { down: new Set<string>(), up: new Set<string>() } as Collapse };
+const memo = { center: SELF_ID, mode: "work" as Mode, depth: 1 as 1 | 2, legend: false, collapse: { down: new Set<string>(), up: new Set<string>() } as Collapse };
 
 export const MapPage = () => {
   const data = useData();
@@ -26,6 +26,7 @@ export const MapPage = () => {
   const qm = query.get("m") as Mode | null;
   const [mode, setModeState] = useState<Mode>(qm && MODES.includes(qm) ? qm : memo.mode);
   const [depth, setDepthState] = useState<1 | 2>(memo.depth);
+  const [legend, setLegend] = useState(memo.legend);
   const [collapse, setCollapse] = useState<Collapse>(memo.collapse);
   const toggleGroup = (gid: string): void => {
     const open = new Set(collapse.groupsOpen ?? []);
@@ -101,19 +102,23 @@ export const MapPage = () => {
         </div>
       </div>
 
-      {mode !== "kin" && (
-        <div className="map-sub">
-          <GraphLegend />
+      <div className="map-sub">
+        {mode !== "kin" ? (
           <div className="segment tiny-seg">
             <button type="button" className={depth === 1 ? "on" : ""} onClick={() => setDepth(1)}>直接</button>
             <button type="button" className={depth === 2 ? "on" : ""} onClick={() => setDepth(2)}>2つ先まで</button>
           </div>
-        </div>
-      )}
-      {mode === "kin" && (
-        <div className="map-sub">
-          <GraphLegend family />
+        ) : (
           <span className="small muted">上が上の世代・きょうだいは左が年上</span>
+        )}
+        <button type="button" className="text-btn small" style={{ marginLeft: "auto" }}
+          onClick={() => { memo.legend = !legend; setLegend(!legend); }}>
+          {legend ? "凡例を隠す" : "凡例"}
+        </button>
+      </div>
+      {legend && (
+        <div className="map-sub">
+          <GraphLegend family={mode === "kin"} />
         </div>
       )}
 
@@ -131,7 +136,7 @@ export const MapPage = () => {
           </div>
         </div>
       ) : (
-        <GraphView graph={graph} centerId={centerId} height="calc(100dvh - 250px - env(safe-area-inset-bottom))"
+        <GraphView graph={graph} centerId={centerId} height={`calc(100dvh - ${legend ? 250 : 210}px - env(safe-area-inset-bottom))`}
           onTap={(id) => (id.startsWith("grp:") ? toggleGroup(id.slice(4)) : id === centerId ? navigate(`/p/${id}`) : setCenter(id))} onToggle={toggle} />
       )}
 

@@ -5,7 +5,7 @@
 //   家系図（family）: 親子・夫婦・兄弟のつながりだけをたどり、世代ごとに横一列に並べる
 
 import { childrenOf, compareAge, exSpousesOf, familyIndex, kinLabel, parentsOf, siblingsOf, sortByAge, spousesOf } from "./family";
-import { type AppData, type Person, type Relation, type RelType, SELF_ID as SELF_ID_FOR_GRAPH, relationLabelFrom } from "./model";
+import { type AppData, type Group, type Person, type Relation, type RelType, SELF_ID as SELF_ID_FOR_GRAPH, relationLabelFrom } from "./model";
 
 export interface GNode {
   id: string;
@@ -870,6 +870,9 @@ export const scopesOf = (data: AppData, id: string, kin = kinSetOf(data)): Set<S
   return out;
 };
 
+/** どのグループにも入らない人をまとめる仮の丸 */
+export const OTHER_GROUP = "__other";
+
 export const buildScoped = (data: AppData, centerId: string, scope: "work" | "private", maxDepth: 1 | 2, collapse?: Collapse): Graph => {
   const { persons, rels, adj } = aliveIndex(data);
   const fx = familyIndex(data);
@@ -904,10 +907,10 @@ export const buildScoped = (data: AppData, centerId: string, scope: "work" | "pr
   const count = new Map<string, number>();
   for (const { id } of ring1) for (const g of persons.get(id)!.groups) if (groups.has(g)) count.set(g, (count.get(g) ?? 0) + 1);
   const bucketOf = new Map<string, string>();
-  // 上司・部下は丸にしまわず、いつも見えるようにする
-  const keepOut = (r?: Relation): boolean => !!r && r.type === "boss";
+  // 上司・部下と「重要な人」は丸にしまわず、いつも見えるようにする
+  const keepOut = (id: string, r?: Relation): boolean => (!!r && r.type === "boss") || !!persons.get(id)!.pinned;
   for (const { id, r } of ring1) {
-    if (keepOut(r)) continue;
+    if (keepOut(id, r)) continue;
     const gs = persons.get(id)!.groups.filter((g) => groups.has(g));
     const pick = gs.find((g) => centerGroups.includes(g)) ?? gs.filter((g) => (count.get(g) ?? 0) >= 2).sort((a, b) => count.get(b)! - count.get(a)!)[0];
     if (pick) bucketOf.set(id, pick);
@@ -915,6 +918,13 @@ export const buildScoped = (data: AppData, centerId: string, scope: "work" | "pr
   const buckets = new Map<string, string[]>();
   for (const [id, g] of bucketOf) buckets.set(g, [...(buckets.get(g) ?? []), id]);
   for (const [g, ids] of buckets) if (ids.length < 2 && !centerGroups.includes(g)) { buckets.delete(g); ids.forEach((i) => bucketOf.delete(i)); }
+  // どのグループにも入らない人が多いときは「その他」の丸にまとめる（人数が増えても図が線だらけにならないように）
+  const loose = ring1.filter((x) => !bucketOf.has(x.id) && !keepOut(x.id, x.r));
+  if (loose.length > 8) {
+    groups.set(OTHER_GROUP, { id: OTHER_GROUP, name: "その他", kind: scope === "work" ? "work" : "other", createdAt: 0, updatedAt: 0 } as Group);
+    buckets.set(OTHER_GROUP, loose.map((x) => x.id));
+    for (const x of loose) bucketOf.set(x.id, OTHER_GROUP);
+  }
   const openSet = collapse?.groupsOpen ?? new Set<string>();
 
   type Item = { kind: "person"; id: string; r?: Relation } | { kind: "group"; gid: string; ids: string[] };

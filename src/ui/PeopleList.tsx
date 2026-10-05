@@ -1,11 +1,12 @@
 // src/ui/PeopleList.tsx — 人物一覧（検索・絞り込み・並べ替え）
 
-import { useMemo, useState } from "react";
-import { age, daysSince, daysToBirthday, sinceLabel } from "../dates";
+import { useMemo, useRef, useState } from "react";
+import { daysSince, daysToBirthday, sinceLabel } from "../dates";
 import { CATEGORIES, CATEGORY_LABEL, type Category, type Person } from "../model";
 import { navigate } from "../router";
 import { alive, lastMetMap, useData } from "../store";
-import { Avatar, Icon } from "./common";
+import { Avatar, Icon, personSub } from "./common";
+import { ThisWeek } from "./ThisWeek";
 
 type Sort = "birthday" | "kana" | "recent" | "stale" | "added";
 
@@ -27,6 +28,7 @@ export const PeopleList = () => {
   const [sort, setSort] = useState<Sort>(memo.sort);
   const [tag, setTag] = useState(memo.tag);
   const [group, setGroup] = useState(memo.group);
+  const [filterOpen, setFilterOpen] = useState(false);
   Object.assign(memo, { q, cat, sort, tag, group });
   const groups = useMemo(() => alive(data.groups ?? []), [data.groups]);
 
@@ -42,7 +44,7 @@ export const PeopleList = () => {
     const filtered = persons.filter((p) => (cat === "all" || p.category === cat) && (!tag || p.tags.includes(tag)) && (!group || p.groups.includes(group)) && hit(p));
     const byKana = (a: Person, b: Person): number => (a.kana || a.name).localeCompare(b.kana || b.name, "ja");
     return filtered.sort((a, b) => {
-      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+      if (sort !== "kana" && !!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
       const la = lastMet.get(a.id) ?? "";
       const lb = lastMet.get(b.id) ?? "";
       switch (sort) {
@@ -66,16 +68,6 @@ export const PeopleList = () => {
     });
   }, [persons, q, cat, tag, group, sort, lastMet]);
 
-  // 今日・明日が誕生日の人
-  const soon = useMemo(
-    () =>
-      persons
-        .map((p) => ({ p, d: daysToBirthday(p.birthDate) }))
-        .filter((x): x is { p: Person; d: number } => x.d !== null && x.d <= 1 && !x.p.deathDate)
-        .sort((a, b) => a.d - b.d),
-    [persons],
-  );
-
   const birthdayLabel = (p: Person): string => {
     if (p.deathDate) return "故人";
     const d = daysToBirthday(p.birthDate);
@@ -87,21 +79,7 @@ export const PeopleList = () => {
 
   return (
     <>
-      {soon.length > 0 && (
-        <div className="card banner birthday-banner">
-          <div className="grow">
-            {soon.map(({ p, d }) => {
-              const a = age(p.birthDate, p.birthYearUnknown);
-              return (
-                <button type="button" key={p.id} className="birthday-line" onClick={() => navigate(`/p/${p.id}`)}>
-                  <strong>{d === 0 ? "今日" : "明日"}</strong>は <strong>{p.name}</strong> の誕生日
-                  {a !== null && <span className="muted">（{d === 0 ? a : a + 1}歳）</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <ThisWeek data={data} persons={persons} />
       <div className="sticky-head">
       <input className="search" type="search" placeholder="名前・所属・タグで検索" value={q} onChange={(e) => setQ(e.target.value)} />
 
@@ -114,17 +92,18 @@ export const PeopleList = () => {
             {CATEGORY_LABEL[c]}
           </button>
         ))}
-        {groups.map((g) => (
-          <button type="button" key={`g-${g.id}`} className={`chip ${group === g.id ? "on" : ""}`} onClick={() => setGroup(group === g.id ? "" : g.id)}>
-            {g.name}
-          </button>
-        ))}
-        {allTags.map((t) => (
-          <button type="button" key={`t-${t}`} className={`chip ${tag === t ? "on" : ""}`} onClick={() => setTag(tag === t ? "" : t)}>
-            #{t}
-          </button>
-        ))}
       </div>
+      {(groups.length > 0 || allTags.length > 0) && (
+        <div className="chips">
+          <button type="button" className={`chip ${group || tag ? "" : "ghost"}`} onClick={() => setFilterOpen(true)}>
+            ＋ グループ・タグで絞る
+          </button>
+          {group && (
+            <button type="button" className="chip on" onClick={() => setGroup("")}>{groups.find((g) => g.id === group)?.name ?? "グループ"} ×</button>
+          )}
+          {tag && <button type="button" className="chip on" onClick={() => setTag("")}>#{tag} ×</button>}
+        </div>
+      )}
 
       <div className="toolbar">
         <span className="count">{list.length}人</span>
@@ -148,11 +127,12 @@ export const PeopleList = () => {
         <div className="empty">該当する人がいません</div>
       ) : (
         <div className="list card">
-          {list.map((p) => {
+          {list.map((p, i) => {
             const met = lastMet.get(p.id);
             const days = daysSince(met);
+            const head = sort === "kana" && (i === 0 || rowOf(list[i - 1]) !== rowOf(p)) ? rowOf(p) : undefined;
             return (
-              <button type="button" key={p.id} className="row" onClick={() => navigate(`/p/${p.id}`)}>
+              <button type="button" key={p.id} className="row" data-index={head} onClick={() => navigate(`/p/${p.id}`)}>
                 <Avatar person={p} size={42} />
                 <div className="row-main">
                   <div className="row-name">
@@ -163,7 +143,7 @@ export const PeopleList = () => {
                     )}
                     {p.name}
                   </div>
-                  <div className="row-sub">{[p.org, p.dept].filter(Boolean).join(" ・ ") || CATEGORY_LABEL[p.category]}</div>
+                  <div className="row-sub">{personSub(p, groups)}</div>
                 </div>
                 {sort === "birthday" ? (
                   <div className={`row-side ${(daysToBirthday(p.birthDate) ?? 99) <= 7 ? "soon" : ""}`}>{birthdayLabel(p)}</div>
@@ -176,9 +156,94 @@ export const PeopleList = () => {
         </div>
       )}
 
+      {sort === "kana" && list.length > 20 && <KanaIndex present={new Set(list.map(rowOf))} />}
+
+      {filterOpen && (
+        <div className="sheet-back" onClick={() => setFilterOpen(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-head">
+              <h2>グループ・タグで絞る</h2>
+              <button type="button" className="text-btn" onClick={() => setFilterOpen(false)}>閉じる</button>
+            </div>
+            <div className="sheet-body">
+              {groups.length > 0 && (
+                <>
+                  <div className="picker-head">グループ</div>
+                  <div className="token-box flat">
+                    {groups.map((g) => {
+                      const n = persons.filter((p) => p.groups.includes(g.id)).length;
+                      return (
+                        <button type="button" key={g.id} className={`chip ${group === g.id ? "on" : ""}`}
+                          onClick={() => { setGroup(group === g.id ? "" : g.id); setFilterOpen(false); }}>
+                          {g.name} <span className="muted small">{n}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {allTags.length > 0 && (
+                <>
+                  <div className="picker-head">タグ</div>
+                  <div className="token-box flat">
+                    {allTags.map((t) => (
+                      <button type="button" key={t} className={`chip ${tag === t ? "on" : ""}`}
+                        onClick={() => { setTag(tag === t ? "" : t); setFilterOpen(false); }}>
+                        #{t}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <button type="button" className="fab" onClick={() => navigate("/new")}>
         <Icon name="plus" size={18} /> 人を追加
       </button>
     </>
+  );
+};
+
+// ------------------------------------------------------------ 50 音の早送り
+
+const ROWS = ["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ"];
+const ROW_START = "あかさたなはまやらわ";
+const ROW_KANA = ["あいうえおぁぃぅぇぉゔ", "かきくけこがぎぐげご", "さしすせそざじずぜぞ", "たちつてとだぢづでどっ", "なにぬねの", "はひふへほばびぶべぼぱぴぷぺぽ", "まみむめも", "やゆよゃゅょ", "らりるれろ", "わをんゎ"];
+
+/** その人が 50 音のどの行か（ふりがな → 名前の順に見て、かなでなければ「他」） */
+export const rowOf = (p: Pick<Person, "kana" | "name">): string => {
+  const c0 = [...(p.kana || p.name).trim()][0] ?? "";
+  // カタカナはひらがなに
+  const c = c0 >= "ァ" && c0 <= "ヶ" ? String.fromCharCode(c0.charCodeAt(0) - 0x60) : c0;
+  const i = ROW_KANA.findIndex((row) => row.includes(c));
+  return i >= 0 ? ROW_START[i] : /[a-zA-Z]/.test(c) ? "A" : "他";
+};
+
+const KanaIndex = ({ present }: { present: Set<string> }) => {
+  const bar = useRef<HTMLDivElement>(null);
+  const keys = [...ROWS, "A", "他"];
+  const jump = (k: string): void => {
+    // その行の人がいなければ、次にいる行へ
+    const from = keys.indexOf(k);
+    const hit = keys.slice(from).find((x) => present.has(x)) ?? keys.slice(0, from).reverse().find((x) => present.has(x));
+    if (!hit) return;
+    document.querySelector(`[data-index="${hit}"]`)?.scrollIntoView({ block: "start" });
+  };
+  const fromPoint = (x: number, y: number): void => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const k = el?.dataset?.key;
+    if (k) jump(k);
+  };
+  return (
+    <div className="kana-index" ref={bar}
+      onPointerDown={(e) => { (e.target as HTMLElement).releasePointerCapture?.(e.pointerId); fromPoint(e.clientX, e.clientY); }}
+      onPointerMove={(e) => { if (e.buttons || e.pointerType === "touch") fromPoint(e.clientX, e.clientY); }}>
+      {keys.map((k) => (
+        <span key={k} data-key={k} className={present.has(k) ? "" : "dim"}>{k}</span>
+      ))}
+    </div>
   );
 };
