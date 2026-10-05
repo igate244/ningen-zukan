@@ -332,7 +332,7 @@ export const PersonEdit = ({ id }: { id?: string }) => {
         {error && <p className="error">{error}</p>}
 
         {/* ---- 選ぶもの：区分・性別・重要 */}
-        <Group>
+        <Group footer={p.isSelf ? undefined : "区分で相関図のどこに出るかが決まります（仕事→仕事／家族・親族→親族／友人・その他→プライベート）"}>
           {!p.isSelf && (
             <div className="frow">
               <span className="frow-label">区分</span>

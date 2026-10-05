@@ -5,7 +5,7 @@
 //   家系図（family）: 親子・夫婦・兄弟のつながりだけをたどり、世代ごとに横一列に並べる
 
 import { childrenOf, compareAge, exSpousesOf, familyIndex, kinLabel, parentsOf, siblingsOf, sortByAge, spousesOf } from "./family";
-import { type AppData, type Group, type Person, type Relation, type RelType, SELF_ID as SELF_ID_FOR_GRAPH, relationLabelFrom } from "./model";
+import { type AppData, type Category, type Group, type Person, type Relation, type RelType, SELF_ID as SELF_ID_FOR_GRAPH, relationLabelFrom } from "./model";
 
 export interface GNode {
   id: string;
@@ -826,7 +826,6 @@ export const buildGroup = (data: AppData, groupId: string): Graph => {
 export type Scope = "kin" | "work" | "private";
 export const SCOPE_LABEL: Record<Scope, string> = { kin: "親族", work: "仕事", private: "プライベート" };
 
-const WORK_REL: RelType[] = ["boss", "colleague"];
 
 /** 自分の親族（自分から親子・夫婦・兄弟でたどれる人と、区分が家族・親族の人） */
 export const kinSetOf = (data: AppData): Set<string> => {
@@ -849,25 +848,22 @@ export const kinSetOf = (data: AppData): Set<string> => {
   return set;
 };
 
-/** その人がどの図に出るか（複数あり） */
-export const scopesOf = (data: AppData, id: string, kin = kinSetOf(data)): Set<Scope> => {
-  const out = new Set<Scope>();
+/** 区分からどの図に出るかを決める（仕事 → 仕事、家族・親族 → 親族、友人・その他 → プライベート） */
+export const scopeOfCategory = (c: Category): Scope => (c === "work" ? "work" : c === "family" || c === "relative" ? "kin" : "private");
+
+/** その人がどの図に出るか。区分だけで決める（自分はすべての図に出る） */
+export const scopesOf = (data: AppData, id: string): Set<Scope> => {
   if (id === SELF_ID_FOR_GRAPH) return new Set<Scope>(["kin", "work", "private"]);
   const p = data.persons.find((x) => x.id === id && !x.deleted);
-  if (!p) return out;
-  const groups = new Map((data.groups ?? []).filter((g) => !g.deleted).map((g) => [g.id, g]));
-  const gKinds = p.groups.map((g) => groups.get(g)?.kind).filter(Boolean);
-  const rels = data.relations.filter((r) => !r.deleted && (r.a === id || r.b === id));
-  if (kin.has(id)) out.add("kin");
-  if (p.category === "work" || gKinds.includes("work") || rels.some((r) => WORK_REL.includes(r.type))) out.add("work");
-  if (!kin.has(id)) {
-    const priv =
-      p.category === "friend" || p.category === "other" ||
-      gKinds.some((k) => k !== "work" && k !== "family") ||
-      rels.some((r) => r.type === "friend" || r.type === "introduced");
-    if (priv || !out.has("work")) out.add("private");
-  }
-  return out;
+  return p ? new Set<Scope>([scopeOfCategory(p.category)]) : new Set<Scope>();
+};
+
+/** グループがどの図に出るか（メンバーの区分でいちばん多いもの。同数なら仕事 → プライベート → 親族） */
+export const groupScopeOf = (data: AppData, groupId: string): Scope | null => {
+  const count: Record<Scope, number> = { work: 0, private: 0, kin: 0 };
+  for (const p of data.persons) if (!p.deleted && !p.isSelf && p.groups.includes(groupId)) count[scopeOfCategory(p.category)]++;
+  const best = (["work", "private", "kin"] as Scope[]).sort((a, b) => count[b] - count[a])[0];
+  return count[best] > 0 ? best : null;
 };
 
 /** どのグループにも入らない人をまとめる仮の丸 */
@@ -879,12 +875,7 @@ export const buildScoped = (data: AppData, centerId: string, scope: "work" | "pr
   const center = persons.get(centerId);
   if (!center) return { nodes: [], edges: [], width: 0, height: 0 };
   const kin = kinSetOf(data);
-  const scopeCache = new Map<string, Set<Scope>>();
-  const inScope = (id: string): boolean => {
-    if (id === centerId) return true;
-    if (!scopeCache.has(id)) scopeCache.set(id, scopesOf(data, id, kin));
-    return scopeCache.get(id)!.has(scope);
-  };
+  const inScope = (id: string): boolean => id === centerId || (!!persons.get(id) && scopeOfCategory(persons.get(id)!.category) === scope);
   const nonFam = (r: Relation): boolean => !FAMILY.includes(r.type);
   const label = (r: Relation, viewer: string, o: string): string => (r.labelBy === viewer ? r.label : undefined) ?? kinLabel(fx, viewer, o) ?? relationLabelFrom(r, viewer);
   const name = (id: string): string => (persons.get(id)!.isSelf ? "自分" : persons.get(id)!.name);
@@ -897,12 +888,12 @@ export const buildScoped = (data: AppData, centerId: string, scope: "work" | "pr
   }
 
   // ---- グループ：この図に合う種類のグループだけ
-  const groupOk = (kind: string): boolean => (scope === "work" ? kind === "work" : kind !== "work" && kind !== "family");
-  const groups = new Map((data.groups ?? []).filter((g) => !g.deleted && groupOk(g.kind)).map((g) => [g.id, g]));
+  // グループはメンバーの区分でいちばん多い図に出す
+  const groups = new Map((data.groups ?? []).filter((g) => !g.deleted && groupScopeOf(data, g.id) === scope).map((g) => [g.id, g]));
   const centerGroups = center.groups.filter((g) => groups.has(g));
   for (const p of persons.values()) {
     if (p.id === centerId || ring1.some((x) => x.id === p.id)) continue;
-    if (p.groups.some((g) => centerGroups.includes(g))) ring1.push({ id: p.id });
+    if (inScope(p.id) && p.groups.some((g) => centerGroups.includes(g))) ring1.push({ id: p.id });
   }
   const count = new Map<string, number>();
   for (const { id } of ring1) for (const g of persons.get(id)!.groups) if (groups.has(g)) count.set(g, (count.get(g) ?? 0) + 1);
@@ -965,7 +956,6 @@ export const buildScoped = (data: AppData, centerId: string, scope: "work" | "pr
   const nodes: GNode[] = [{ id: centerId, person: center, x: 0, y: 0, depth: 0 }];
   const pos = new Map<string, GNode>([[centerId, nodes[0]]]);
   const edges: GEdge[] = [];
-  const kinMark = (id: string): string => (scope === "work" && kin.has(id) ? "・親族" : "");
   const relWithCenter = (id: string): Relation | undefined => rels.find((r) => (r.a === centerId && r.b === id) || (r.b === centerId && r.a === id));
 
   for (const it of items) {
@@ -973,7 +963,7 @@ export const buildScoped = (data: AppData, centerId: string, scope: "work" | "pr
     const x = Math.cos(a) * R1;
     const y = Math.sin(a) * R1;
     if (it.kind === "person") {
-      const n: GNode = { id: it.id, person: persons.get(it.id)!, x, y, depth: 1, sub: (it.r ? label(it.r, centerId, it.id) : "") + kinMark(it.id) || undefined };
+      const n: GNode = { id: it.id, person: persons.get(it.id)!, x, y, depth: 1, sub: (it.r ? label(it.r, centerId, it.id) : "") || undefined };
       nodes.push(n);
       pos.set(it.id, n);
     } else {
@@ -999,7 +989,7 @@ export const buildScoped = (data: AppData, centerId: string, scope: "work" | "pr
       const g = groups.get(it.gid)!;
       for (const id of it.ids) {
         const r = relWithCenter(id);
-        outer.set(id, { parent: `grp:${it.gid}`, sub: (r ? label(r, centerId, id) : g.name) + kinMark(id) });
+        outer.set(id, { parent: `grp:${it.gid}`, sub: r ? label(r, centerId, id) : g.name });
       }
       continue;
     }

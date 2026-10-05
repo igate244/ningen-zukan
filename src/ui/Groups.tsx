@@ -70,7 +70,7 @@ export const GroupsPage = () => {
 
 export const GroupEditSheet = ({ group, onClose, onSaved }: { group?: Group; onClose: () => void; onSaved?: (g: Group) => void }) => {
   const [name, setName] = useState(group?.name ?? "");
-  const [kind, setKind] = useState<GroupKind>(group?.kind ?? "work");
+  const [kind, setKind] = useState<GroupKind>(group?.kind ?? "other");
   const [period, setPeriod] = useState(group?.period ?? "");
   const [note, setNote] = useState(group?.note ?? "");
 
