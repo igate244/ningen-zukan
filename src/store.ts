@@ -159,6 +159,18 @@ export const deleteGroup = async (id: string): Promise<void> => {
   await Promise.all([db.put("groups", item), db.putMany("persons", touched)]);
 };
 
+/** タグを全員から外す（タグを消す） */
+export const deleteTag = async (tag: string): Promise<void> => {
+  const now = Date.now();
+  const touched = data.persons.filter((p) => p.tags.includes(tag)).map((p) => ({ ...p, tags: p.tags.filter((t) => t !== tag), updatedAt: now }));
+  if (!touched.length) return;
+  let persons = data.persons;
+  for (const p of touched) persons = upsert(persons, p);
+  data = { ...data, persons };
+  emit(true);
+  await db.putMany("persons", touched);
+};
+
 /** まとめて所属を付け外しする */
 export const setGroupMembers = async (groupId: string, memberIds: string[]): Promise<void> => {
   const now = Date.now();

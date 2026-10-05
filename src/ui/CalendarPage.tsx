@@ -142,24 +142,27 @@ export const RecordsPage = () => {
   while (cells.length % 7) cells.push(null);
   const todayStr = today();
 
+  const modeSeg = (
+    <div className="segment" style={{ marginTop: 0, position: "static", marginBottom: 6 }}>
+      <button type="button" className={mode === "calendar" ? "on" : ""} onClick={() => setMode("calendar")}>カレンダー</button>
+      <button type="button" className={mode === "list" ? "on" : ""} onClick={() => setMode("list")}>記録の一覧</button>
+    </div>
+  );
+
   return (
     <>
-      <div className="segment" style={{ marginTop: 0, position: "static" }}>
-        <button type="button" className={mode === "calendar" ? "on" : ""} onClick={() => setMode("calendar")}>カレンダー</button>
-        <button type="button" className={mode === "list" ? "on" : ""} onClick={() => setMode("list")}>記録の一覧</button>
-      </div>
-
       {mode === "list" ? (
-        <div style={{ marginTop: 10 }}>
-          <LogsPage />
-        </div>
+        <LogsPage header={modeSeg} />
       ) : (
         <>
+          <div className="sticky-head">
+          {modeSeg}
           <div className="cal-head">
             <button type="button" className="icon-btn" aria-label="前の月" onClick={() => move(-1)}><Icon name="back" /></button>
             <div className="cal-title">{ym.y}年{ym.m + 1}月</div>
             <button type="button" className="icon-btn" aria-label="次の月" onClick={() => move(1)} style={{ transform: "scaleX(-1)" }}><Icon name="back" /></button>
             <button type="button" className="chip" style={{ marginLeft: "auto" }} onClick={goToday}>今日</button>
+          </div>
           </div>
 
           <div className="cal card">

@@ -16,7 +16,7 @@ import {
   emptyPerson, iconCharOf, joinName, newId, splitName,
 } from "../model";
 import { goBack, navigate } from "../router";
-import { addImage, alive, deletePerson, getData, savePerson, useData } from "../store";
+import { addImage, alive, deleteGroup, deletePerson, deleteTag, getData, savePerson, useData } from "../store";
 import { Avatar, Icon, TopBar } from "./common";
 import { GroupEditSheet } from "./Groups";
 
@@ -94,9 +94,9 @@ const Segmented = <T extends string>({ options, value, onChange, labels }: { opt
   </div>
 );
 
-const Group = ({ title, children, footer }: { title?: string; children: ReactNode; footer?: ReactNode }) => (
+const Group = ({ title, children, footer, action }: { title?: string; children: ReactNode; footer?: ReactNode; action?: ReactNode }) => (
   <div className="fgroup">
-    {title && <div className="fgroup-title">{title}</div>}
+    {title && <div className="fgroup-title">{title}{action}</div>}
     <div className="fgroup-body">{children}</div>
     {footer && <div className="fgroup-foot">{footer}</div>}
   </div>
@@ -144,6 +144,9 @@ export const PersonEdit = ({ id }: { id?: string }) => {
   const [justAdded, setJustAdded] = useState<FieldKey | null>(null);
   const [tagDraft, setTagDraft] = useState("");
   const [newGroup, setNewGroup] = useState(false);
+  // グループ・タグを消すモード
+  const [pruneGroups, setPruneGroups] = useState(false);
+  const [pruneTags, setPruneTags] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -159,6 +162,8 @@ export const PersonEdit = ({ id }: { id?: string }) => {
     };
   }, [data.persons]);
   const groups = useMemo(() => alive(data.groups ?? []), [data.groups]);
+  // すべてのタグ（この人の未保存のタグも含める）
+  const allTags = [...new Set([...suggest.tags, ...p.tags])].sort((a, b) => a.localeCompare(b, "ja"));
 
   if (id && !original) return <div className="empty">見つかりません</div>;
 
@@ -339,10 +344,23 @@ export const PersonEdit = ({ id }: { id?: string }) => {
         </Group>
 
         {/* ---- グループ・タグ（タップで付け外し） */}
-        <Group title="所属グループ" footer="会社・学校・部活など、どこの集まりにいるか">
+        <Group title="所属グループ" footer={pruneGroups ? "消したいグループをタップ（人は消えません）" : "会社・学校・部活など、どこの集まりにいるか"}
+          action={groups.length > 0 && (
+            <button type="button" className="text-btn small fgroup-action" onClick={() => setPruneGroups(!pruneGroups)}>{pruneGroups ? "完了" : "グループを消す"}</button>
+          )}>
           <div className="token-box">
             {groups.map((g) => {
               const on = p.groups.includes(g.id);
+              if (pruneGroups) return (
+                <button type="button" key={g.id} className="chip prune"
+                  onClick={() => {
+                    if (!window.confirm(`グループ「${g.name}」を削除しますか？\n（全員の所属から外れます。人は消えません）`)) return;
+                    void deleteGroup(g.id);
+                    set("groups", p.groups.filter((x) => x !== g.id));
+                  }}>
+                  × {g.name}
+                </button>
+              );
               return (
                 <button type="button" key={g.id} className={`chip ${on ? "on" : ""}`}
                   onClick={() => set("groups", on ? p.groups.filter((x) => x !== g.id) : [...p.groups, g.id])}>
@@ -350,11 +368,28 @@ export const PersonEdit = ({ id }: { id?: string }) => {
                 </button>
               );
             })}
-            <button type="button" className="chip ghost" onClick={() => setNewGroup(true)}>＋ 新しいグループ</button>
+            {!pruneGroups && <button type="button" className="chip ghost" onClick={() => setNewGroup(true)}>＋ 新しいグループ</button>}
           </div>
         </Group>
 
-        <Group title="特徴タグ" footer="キーマン・酒好きなど、どんな人か">
+        <Group title="特徴タグ" footer={pruneTags && allTags.length > 0 ? "消したいタグをタップ（全員から外れます）" : "キーマン・酒好きなど、どんな人か"}
+          action={allTags.length > 0 && (
+            <button type="button" className="text-btn small fgroup-action" onClick={() => setPruneTags(!pruneTags)}>{pruneTags ? "完了" : "タグを消す"}</button>
+          )}>
+          {pruneTags && allTags.length > 0 ? (
+            <div className="token-box">
+              {allTags.map((t) => (
+                <button type="button" key={t} className="chip prune"
+                  onClick={() => {
+                    if (!window.confirm(`タグ「#${t}」を削除しますか？\n（付いている全員から外れます）`)) return;
+                    void deleteTag(t);
+                    set("tags", p.tags.filter((x) => x !== t));
+                  }}>
+                  × #{t}
+                </button>
+              ))}
+            </div>
+          ) : (<>
           <div className="token-box">
             {p.tags.map((t) => (
               <span key={t} className="chip on">
@@ -378,6 +413,7 @@ export const PersonEdit = ({ id }: { id?: string }) => {
               ))}
             </div>
           )}
+          </>)}
         </Group>
 
         {/* ---- 入っている項目・足した項目だけ出す */}

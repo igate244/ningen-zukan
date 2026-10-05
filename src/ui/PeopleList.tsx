@@ -102,6 +102,7 @@ export const PeopleList = () => {
           </div>
         </div>
       )}
+      <div className="sticky-head">
       <input className="search" type="search" placeholder="名前・所属・タグで検索" value={q} onChange={(e) => setQ(e.target.value)} />
 
       <div className="chips">
@@ -134,6 +135,7 @@ export const PeopleList = () => {
             </option>
           ))}
         </select>
+      </div>
       </div>
 
       {persons.length === 0 ? (

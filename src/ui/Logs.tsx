@@ -1,13 +1,13 @@
 // src/ui/Logs.tsx — 交流ログの一覧と、記録の追加・編集
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { formatDate, today } from "../dates";
 import { LOG_KINDS, LOG_KIND_LABEL, type LogEntry, type LogKind, newId } from "../model";
 import { goBack, navigate } from "../router";
 import { alive, deleteLog, getData, saveLog, useData } from "../store";
 import { Avatar, Field, Icon, PersonPicker, TopBar } from "./common";
 
-export const LogsPage = () => {
+export const LogsPage = ({ header }: { header?: ReactNode } = {}) => {
   const data = useData();
   const [kind, setKind] = useState<LogKind | "all">("all");
   const [q, setQ] = useState("");
@@ -29,6 +29,8 @@ export const LogsPage = () => {
 
   return (
     <>
+      <div className="sticky-head">
+      {header}
       <input className="search" type="search" placeholder="内容・名前で検索" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="chips">
         <button type="button" className={`chip ${kind === "all" ? "on" : ""}`} onClick={() => setKind("all")}>すべて</button>
@@ -37,6 +39,7 @@ export const LogsPage = () => {
             {LOG_KIND_LABEL[k]}
           </button>
         ))}
+      </div>
       </div>
 
       {groups.length === 0 ? (
