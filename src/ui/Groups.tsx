@@ -5,7 +5,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { age, daysToBirthday, formatDate, formatMonthDay, kaikiLabel, sinceLabel } from "../dates";
-import { groupScopeOf } from "../graph";
 import {
   type Category, CATEGORIES, CATEGORY_LABEL, GROUP_COLORS, GROUP_KINDS, GROUP_KIND_LABEL, type Group, type GroupKind, LOG_KIND_LABEL,
   type Person, emptyPerson, joinName, newId, selfLabel, splitName,
@@ -13,7 +12,7 @@ import {
 import { navigate } from "../router";
 import { alive, deleteGroup, getData, lastMetMap, saveGroup, savePerson, setGroupMembers, useData } from "../store";
 import { Avatar, Field, Icon, PersonPicker, TopBar } from "./common";
-import { GroupMark, markGroupOpened, membersOf, nextBirthdayIn, sortGroups } from "./groupUtil";
+import { GroupMark, categoryForGroup, markGroupOpened, membersOf, nextBirthdayIn, sortGroups } from "./groupUtil";
 import { OrgPage } from "./OrgPage";
 
 // ------------------------------------------------------------------ 一覧
@@ -166,6 +165,8 @@ export const GroupDetail = ({ id }: { id: string }) => {
   const [picking, setPicking] = useState(false);
   const [adding, setAdding] = useState(false);
   const [roleMode, setRoleMode] = useState(false);
+  // グループを変える人
+  const [moving, setMoving] = useState<string | null>(null);
   const members = useMemo(() => membersOf(data, id), [data, id]);
   const lastMet = useMemo(() => lastMetMap(data), [data]);
 
@@ -256,12 +257,15 @@ export const GroupDetail = ({ id }: { id: string }) => {
             <Icon name="pen" size={16} /> このグループで記録
           </button>
         </div>
-        <div className="actions" style={{ marginTop: 8 }}>
-          <button type="button" className="btn" onClick={() => setPicking(true)}>
-            <Icon name="people" size={16} /> メンバーを選ぶ
+        <div className="actions three" style={{ marginTop: 8 }}>
+          <button type="button" className="btn" onClick={() => navigate(`/new?g=${id}`)}>
+            <Icon name="plus" size={16} /> 新しい人
           </button>
           <button type="button" className="btn" onClick={() => setAdding(true)}>
-            <Icon name="plus" size={16} /> まとめて登録
+            <Icon name="plus" size={16} /> まとめて
+          </button>
+          <button type="button" className="btn" onClick={() => setPicking(true)}>
+            <Icon name="people" size={16} /> 選ぶ
           </button>
         </div>
 
@@ -278,7 +282,7 @@ export const GroupDetail = ({ id }: { id: string }) => {
                 {(Object.keys(SORT_LABEL) as Sort[]).map((s) => <option key={s} value={s}>{SORT_LABEL[s]}</option>)}
               </select>
               <button type="button" className="text-btn small" onClick={() => setRoleMode(!roleMode)}>
-                {roleMode ? "完了" : "役割を付ける"}
+                {roleMode ? "完了" : "役割・グループを変える"}
               </button>
             </div>
             {members.length === 0 ? (
@@ -295,10 +299,13 @@ export const GroupDetail = ({ id }: { id: string }) => {
                       <Avatar person={p} size={48} />
                       <div className="mcard-name">{selfLabel(p)}</div>
                       {roleMode ? (
-                        <input className="mcard-role-input" defaultValue={role ?? ""} placeholder="役割" list={`roles-${id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          onBlur={(e) => setRole(p, e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) (e.target as HTMLInputElement).blur(); }} />
+                        <>
+                          <input className="mcard-role-input" defaultValue={role ?? ""} placeholder="役割" list={`roles-${id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            onBlur={(e) => setRole(p, e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) (e.target as HTMLInputElement).blur(); }} />
+                          <button type="button" className="mcard-groups" onClick={() => setMoving(p.id)}>グループ {p.groups.length}</button>
+                        </>
                       ) : (
                         role && <div className="mcard-role">{role}</div>
                       )}
@@ -330,6 +337,7 @@ export const GroupDetail = ({ id }: { id: string }) => {
 
       {editing && <GroupEditSheet group={group} onClose={() => setEditing(false)} />}
       {adding && <QuickAddSheet group={group} onClose={() => setAdding(false)} />}
+      {moving && <MembershipSheet personId={moving} onClose={() => setMoving(null)} />}
       {picking && (
         <PersonPicker
           title={`「${group.name}」のメンバー`}
@@ -455,13 +463,10 @@ const GroupLogs = ({ members }: { members: Person[] }) => {
 
 // ------------------------------------------------------------ まとめて登録
 
-const scopeToCategory = (s: ReturnType<typeof groupScopeOf>, kind: GroupKind): Category =>
-  s === "work" ? "work" : s === "kin" ? "family" : s === "private" ? "friend" : kind === "work" ? "work" : kind === "family" ? "family" : "friend";
-
 const QuickAddSheet = ({ group, onClose }: { group: Group; onClose: () => void }) => {
   const data = useData();
   const [text, setText] = useState("");
-  const [cat, setCat] = useState<Category>(() => scopeToCategory(groupScopeOf(getData(), group.id), group.kind));
+  const [cat, setCat] = useState<Category>(() => categoryForGroup(getData(), group));
   const [busy, setBusy] = useState(false);
 
   const norm = (x: string): string => x.replace(/[\s　]+/g, "");
@@ -549,6 +554,54 @@ const QuickAddSheet = ({ group, onClose }: { group: Group; onClose: () => void }
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ------------------------------------------------------------ 1 人のグループを変える
+
+export const MembershipSheet = ({ personId, onClose }: { personId: string; onClose: () => void }) => {
+  const data = useData();
+  const person = data.persons.find((p) => p.id === personId && !p.deleted);
+  const groups = useMemo(() => sortGroups(alive(data.groups ?? [])), [data.groups]);
+  const [creating, setCreating] = useState(false);
+  if (!person) return null;
+
+  const toggle = (gid: string): void => {
+    const on = person.groups.includes(gid);
+    void savePerson({ ...person, groups: on ? person.groups.filter((x) => x !== gid) : [...person.groups, gid] });
+  };
+
+  return (
+    <div className="sheet-back" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head">
+          <h2>{selfLabel(person)}のグループ</h2>
+          <button type="button" className="text-btn" onClick={onClose}>完了</button>
+        </div>
+        <div className="sheet-body">
+          <div className="small muted" style={{ margin: "0 4px 8px" }}>タップで入れる・外す（すぐ保存されます）</div>
+          <div className="token-box flat">
+            {groups.map((g) => {
+              const on = person.groups.includes(g.id);
+              return (
+                <button type="button" key={g.id} className={`chip ${on ? "on" : ""}`} onClick={() => toggle(g.id)}>
+                  {on ? "✓ " : ""}{g.emoji ? `${g.emoji} ` : ""}{g.name}
+                </button>
+              );
+            })}
+            <button type="button" className="chip ghost" onClick={() => setCreating(true)}>＋ 新しいグループ</button>
+          </div>
+        </div>
+      </div>
+      {creating && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <GroupEditSheet
+            onClose={() => setCreating(false)}
+            onSaved={(g) => void savePerson({ ...person, groups: [...person.groups, g.id] })}
+          />
+        </div>
+      )}
     </div>
   );
 };

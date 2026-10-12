@@ -1,7 +1,8 @@
 // src/ui/groupUtil.tsx — グループまわりの小道具（目印・並び順・最近開いた記録）
 
 import { daysToBirthday } from "../dates";
-import { type AppData, GROUP_KIND_LABEL, type Group, type Person } from "../model";
+import { groupScopeOf } from "../graph";
+import { type AppData, type Category, GROUP_KIND_LABEL, type Group, type Person } from "../model";
 import { alive } from "../store";
 
 // ------------------------------------------------------------ 最近開いたグループ（この端末だけ）
@@ -49,6 +50,13 @@ export const nextBirthdayIn = (members: Person[], days: number): { p: Person; d:
     if (d !== null && d <= days && (!best || d < best.d)) best = { p, d };
   }
   return best;
+};
+
+/** そのグループに新しく入れる人の区分（メンバーに多い区分。いなければグループの種類から） */
+export const categoryForGroup = (data: AppData, group: Group): Category => {
+  const s = groupScopeOf(data, group.id);
+  if (s) return s === "work" ? "work" : s === "kin" ? "family" : "friend";
+  return group.kind === "work" ? "work" : group.kind === "family" ? "family" : "friend";
 };
 
 // ------------------------------------------------------------ 目印

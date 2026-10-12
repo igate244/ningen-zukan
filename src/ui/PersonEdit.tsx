@@ -19,6 +19,7 @@ import { goBack, navigate } from "../router";
 import { addImage, alive, deleteGroup, deletePerson, deleteTag, getData, savePerson, useData } from "../store";
 import { Avatar, Icon, TopBar, personSub } from "./common";
 import { GroupEditSheet } from "./Groups";
+import { categoryForGroup } from "./groupUtil";
 
 const clean = (s?: string): string | undefined => (s && s.trim() ? s.trim() : undefined);
 
@@ -127,11 +128,13 @@ const filled = (p: Person, k: FieldKey): boolean => {
 
 // ------------------------------------------------------------------ 本体
 
-export const PersonEdit = ({ id }: { id?: string }) => {
+export const PersonEdit = ({ id, presetGroupId }: { id?: string; presetGroupId?: string }) => {
   const data = useData();
   const original = id ? getData().persons.find((p) => p.id === id) : undefined;
   const [p, setP] = useState<Person>(() => {
-    const base = original ?? emptyPerson();
+    // グループの画面から来たときは、そのグループに入った状態・メンバーに多い区分で始める
+    const pg = presetGroupId ? getData().groups.find((g) => g.id === presetGroupId && !g.deleted) : undefined;
+    const base = original ?? (pg ? { ...emptyPerson(), groups: [pg.id], category: categoryForGroup(getData(), pg) } : emptyPerson());
     // 姓・名が未設定の古いデータは、名前の空白で分けて入れておく
     if (base.familyName === undefined && base.givenName === undefined && base.name) {
       const sp = splitName(base.name);
@@ -235,6 +238,7 @@ export const PersonEdit = ({ id }: { id?: string }) => {
         .filter((c) => c.label || c.value),
     });
     if (id) goBack(`/p/${saved.id}`);
+    else if (presetGroupId) goBack(`/g/${presetGroupId}`);
     else navigate(`/p/${saved.id}`, true);
   };
 
@@ -302,7 +306,7 @@ export const PersonEdit = ({ id }: { id?: string }) => {
     <>
       <TopBar
         title={id ? (p.isSelf ? "自分のプロフィール" : "編集") : "人を追加"}
-        back={id ? `/p/${id}` : "/"}
+        back={id ? `/p/${id}` : presetGroupId ? `/g/${presetGroupId}` : "/"}
         right={<button type="button" className="text-btn" onClick={() => void onSave()} disabled={busy}>保存</button>}
       />
       <main className="main edit-main">

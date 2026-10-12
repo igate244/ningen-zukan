@@ -82,7 +82,7 @@ export const App = () => {
   const [a, b, c] = path;
   let page: ReactNode;
 
-  if (a === "new") page = <PersonEdit />;
+  if (a === "new") page = <PersonEdit presetGroupId={query.get("g") ?? undefined} />;
   else if (a === "p" && b && c === "edit") page = <PersonEdit key={b} id={b} />;
   else if (a === "p" && b) page = <PersonDetail key={b} id={b} initialTab={query.get("tab") ?? undefined} />;
   else if (a === "log" && b === "new") page = <LogEdit presetPersonId={query.get("p") ?? undefined} presetDate={query.get("d") ?? undefined} presetKind={query.get("k") === "event" ? "event" : undefined} presetGroupId={query.get("g") ?? undefined} />;
