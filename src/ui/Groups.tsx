@@ -6,13 +6,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { age, daysToBirthday, formatDate, formatMonthDay, kaikiLabel, sinceLabel } from "../dates";
 import {
-  type Category, CATEGORIES, CATEGORY_LABEL, GROUP_COLORS, GROUP_KINDS, GROUP_KIND_LABEL, type Group, type GroupKind, LOG_KIND_LABEL,
+  type Category, CATEGORIES, CATEGORY_LABEL, GROUP_COLORS, type Group, LOG_KIND_LABEL,
   type Person, emptyPerson, joinName, newId, selfLabel, splitName,
 } from "../model";
 import { navigate } from "../router";
 import { alive, deleteGroup, getData, lastMetMap, saveGroup, savePerson, setGroupMembers, useData } from "../store";
 import { Avatar, Field, Icon, PersonPicker, TopBar } from "./common";
-import { GroupMark, categoryForGroup, markGroupOpened, membersOf, nextBirthdayIn, sortGroups } from "./groupUtil";
+import { GroupMark, categoryForGroup, markGroupOpened, membersOf, sortGroups } from "./groupUtil";
 import { OrgPage } from "./OrgPage";
 
 // ------------------------------------------------------------------ 一覧
@@ -20,7 +20,21 @@ import { OrgPage } from "./OrgPage";
 export const GroupsPage = () => {
   const data = useData();
   const [creating, setCreating] = useState(false);
+  const [arranging, setArranging] = useState(false);
   const groups = useMemo(() => sortGroups(alive(data.groups ?? [])), [data.groups]);
+  const count = (gid: string): number => membersOf(data, gid).length;
+
+  // 並びを保存する（順番が変わったグループだけ書き込む）
+  const saveOrder = async (list: Group[]): Promise<void> => {
+    for (const [i, g] of list.entries()) if (g.order !== i) await saveGroup({ ...g, order: i });
+  };
+  const move = (i: number, d: number): void => {
+    const j = i + d;
+    if (j < 0 || j >= groups.length) return;
+    const list = [...groups];
+    [list[i], list[j]] = [list[j], list[i]];
+    void saveOrder(list);
+  };
 
   return (
     <>
@@ -29,27 +43,51 @@ export const GroupsPage = () => {
           「2015年入社の同期」「〇〇小 6年2組」「釣り仲間」のように人をまとめよう。グループを開くと、メンバーのカード・誕生日・記録がまとめて見られます。
         </div>
       ) : (
-        <div className="gcards">
-          {groups.map((g) => {
-            const ms = membersOf(data, g.id);
-            const bd = nextBirthdayIn(ms, 14);
-            return (
-              <button type="button" key={g.id} className="gcard" onClick={() => navigate(`/g/${g.id}`)}
-                style={g.color ? { borderColor: `color-mix(in srgb, ${g.color} 55%, var(--line))` } : undefined}>
-                <div className="gcard-top">
-                  <GroupMark group={g} size={38} />
-                  {g.pinned && <span className="gcard-pin"><Icon name="star" size={13} fill /></span>}
-                </div>
-                <div className="gcard-name">{g.name}</div>
-                <div className="gcard-sub">{ms.length}人{g.period ? ` ・ ${g.period}` : ""}</div>
-                <div className="avatar-stack" style={{ marginLeft: 6, marginTop: 6 }}>
-                  {ms.slice(0, 5).map((p) => <Avatar key={p.id} person={p} size={22} />)}
-                </div>
-                {bd && <div className="gcard-bd">🎂 {bd.d === 0 ? "今日" : bd.d === 1 ? "明日" : `あと${bd.d}日`} {bd.p.name}</div>}
-              </button>
-            );
-          })}
-        </div>
+        <>
+          <div className="toolbar">
+            <span className="count">{groups.length}グループ</span>
+            <button type="button" className="text-btn small" onClick={() => setArranging(!arranging)}>{arranging ? "完了" : "並び替え"}</button>
+          </div>
+          {arranging ? (
+            <>
+              <div className="chips" style={{ paddingTop: 0 }}>
+                <button type="button" className="chip" onClick={() => void saveOrder([...groups].sort((a, b) => a.name.localeCompare(b.name, "ja")))}>名前順にする</button>
+                <button type="button" className="chip" onClick={() => void saveOrder([...groups].sort((a, b) => count(b.id) - count(a.id)))}>人数の多い順にする</button>
+              </div>
+              <div className="list card" style={{ marginTop: 8 }}>
+                {groups.map((g, i) => (
+                  <div key={g.id} className="row" style={{ cursor: "default" }}>
+                    <GroupMark group={g} size={30} />
+                    <div className="row-main">
+                      <div className="row-name">{g.name}</div>
+                      <div className="row-sub">{count(g.id)}人</div>
+                    </div>
+                    <button type="button" className="icon-btn" aria-label="上へ" disabled={i === 0} onClick={() => move(i, -1)} style={{ transform: "rotate(180deg)" }}>
+                      <Icon name="down" size={18} />
+                    </button>
+                    <button type="button" className="icon-btn" aria-label="下へ" disabled={i === groups.length - 1} onClick={() => move(i, 1)}>
+                      <Icon name="down" size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="gtiles">
+              {groups.map((g) => (
+                <button type="button" key={g.id} className="gtile" onClick={() => navigate(`/g/${g.id}`)}
+                  style={g.color ? { borderColor: `color-mix(in srgb, ${g.color} 55%, var(--line))` } : undefined}>
+                  <GroupMark group={g} size={30} />
+                  <span className="gtile-main">
+                    <span className="gtile-name">{g.name}</span>
+                    <span className="gtile-n">{count(g.id)}人</span>
+                  </span>
+                  {g.pinned && <span className="gcard-pin"><Icon name="star" size={11} fill /></span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <div className="section-title" style={{ marginTop: 22 }}>会社・部署（所属から自動）</div>
@@ -75,7 +113,6 @@ export const GroupsPage = () => {
 
 export const GroupEditSheet = ({ group, onClose, onSaved }: { group?: Group; onClose: () => void; onSaved?: (g: Group) => void }) => {
   const [name, setName] = useState(group?.name ?? "");
-  const [kind, setKind] = useState<GroupKind>(group?.kind ?? "other");
   const [period, setPeriod] = useState(group?.period ?? "");
   const [note, setNote] = useState(group?.note ?? "");
   const [emoji, setEmoji] = useState(group?.emoji ?? "");
@@ -86,7 +123,7 @@ export const GroupEditSheet = ({ group, onClose, onSaved }: { group?: Group; onC
     if (!name.trim()) return;
     const g = await saveGroup({
       ...(group ?? { id: newId() }),
-      name: name.trim(), kind, period: period.trim() || undefined, note: note.trim() || undefined,
+      name: name.trim(), period: period.trim() || undefined, note: note.trim() || undefined,
       // 絵文字は 1 文字だけ（日本語入力の途中で切らないよう、保存のときにそろえる）
       emoji: [...emoji.trim()][0] || undefined,
       color, pinned,
@@ -95,7 +132,7 @@ export const GroupEditSheet = ({ group, onClose, onSaved }: { group?: Group; onC
     onClose();
   };
 
-  const preview: Group = { ...(group ?? { id: "x", createdAt: 0, updatedAt: 0 }), name, kind, emoji: [...emoji.trim()][0], color };
+  const preview: Group = { ...(group ?? { id: "x", createdAt: 0, updatedAt: 0 }), name, emoji: [...emoji.trim()][0], color };
 
   return (
     <div className="sheet-back" onClick={onClose}>
@@ -126,13 +163,6 @@ export const GroupEditSheet = ({ group, onClose, onSaved }: { group?: Group; onC
               <span className="small muted grow">人物タブの上とグループ一覧の先頭に出す</span>
               <input type="checkbox" className="switch" checked={pinned} onChange={(e) => setPinned(e.target.checked)} />
             </label>
-            <Field label="種類">
-              <div className="chips" style={{ paddingTop: 0, flexWrap: "wrap" }}>
-                {GROUP_KINDS.map((k) => (
-                  <button type="button" key={k} className={`chip ${kind === k ? "on" : ""}`} onClick={() => setKind(k)}>{GROUP_KIND_LABEL[k]}</button>
-                ))}
-              </div>
-            </Field>
             <Field label="いつ頃の仲間か（任意）">
               <input className="input" value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="2004〜2010 / 中学のとき など" />
             </Field>
@@ -246,7 +276,7 @@ export const GroupDetail = ({ id }: { id: string }) => {
           <div className="grow">
             <div className="ghero-name">{group.name}</div>
             <div className="small muted">
-              {members.length}人{group.period ? ` ・ ${group.period}` : ""} ・ {GROUP_KIND_LABEL[group.kind]}
+              {members.length}人{group.period ? ` ・ ${group.period}` : ""}
             </div>
             {group.note && <div className="small" style={{ marginTop: 4, color: "var(--text-2)" }}>{group.note}</div>}
           </div>

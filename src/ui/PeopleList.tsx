@@ -7,7 +7,7 @@ import { navigate } from "../router";
 import { alive, lastMetMap, useData } from "../store";
 import { Avatar, Icon, personSub } from "./common";
 import { ThisWeek } from "./ThisWeek";
-import { GroupDots, GroupMark, membersOf, sortGroups } from "./groupUtil";
+import { GroupDots, GroupMark, membersOf, sortGroupsForShortcut } from "./groupUtil";
 
 type Sort = "birthday" | "kana" | "recent" | "stale" | "added";
 
@@ -82,7 +82,7 @@ export const PeopleList = () => {
     <>
       {groups.length > 0 && (
         <div className="gshort">
-          {sortGroups(groups).slice(0, 10).map((g) => (
+          {sortGroupsForShortcut(groups).slice(0, 10).map((g) => (
             <button type="button" key={g.id} className="gshort-item" onClick={() => navigate(`/g/${g.id}`)}>
               <GroupMark group={g} size={34} />
               <span className="gshort-name">{g.name}</span>

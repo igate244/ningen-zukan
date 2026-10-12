@@ -253,7 +253,10 @@ export const GROUP_KIND_LABEL: Record<GroupKind, string> = {
 /** 同期・クラス・部署・サークルなどのまとまり。人は Person.groups で所属する */
 export interface Group extends Base {
   name: string;
-  kind: GroupKind;
+  /** 以前の版の「種類」（今は使っていない。区分と重なるため画面から外した） */
+  kind?: GroupKind;
+  /** グループ一覧での並び順（小さいほど上） */
+  order?: number;
   /** いつ頃の仲間か（例: 2004〜2010） */
   period?: string;
   note?: string;

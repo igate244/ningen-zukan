@@ -1,8 +1,7 @@
 // src/ui/groupUtil.tsx — グループまわりの小道具（目印・並び順・最近開いた記録）
 
-import { daysToBirthday } from "../dates";
 import { groupScopeOf } from "../graph";
-import { type AppData, type Category, GROUP_KIND_LABEL, type Group, type Person } from "../model";
+import { type AppData, type Category, type Group, type Person } from "../model";
 import { alive } from "../store";
 
 // ------------------------------------------------------------ 最近開いたグループ（この端末だけ）
@@ -27,30 +26,21 @@ export const markGroupOpened = (id: string): void => {
   }
 };
 
-/** ピン留め → 最近開いた → 名前 の順 */
-export const sortGroups = (groups: Group[]): Group[] => {
+/** 自分で決めた並び順（決めていないグループは作った順で後ろへ） */
+export const sortGroups = (groups: Group[]): Group[] =>
+  [...groups].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || a.createdAt - b.createdAt);
+
+/** 人物タブの上に出す順：よく見る → 最近開いた → 自分で決めた並び順 */
+export const sortGroupsForShortcut = (groups: Group[]): Group[] => {
   const opened = readOpened();
-  return [...groups].sort(
-    (a, b) =>
-      Number(!!b.pinned) - Number(!!a.pinned) ||
-      (opened[b.id] ?? 0) - (opened[a.id] ?? 0) ||
-      a.name.localeCompare(b.name, "ja"),
+  const manual = sortGroups(groups);
+  return [...manual].sort(
+    (a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (opened[b.id] ?? 0) - (opened[a.id] ?? 0) || manual.indexOf(a) - manual.indexOf(b),
   );
 };
 
 export const membersOf = (data: AppData, groupId: string): Person[] =>
   alive(data.persons).filter((p) => p.groups.includes(groupId));
-
-/** メンバーの中で、いちばん近い誕生日（days 日以内） */
-export const nextBirthdayIn = (members: Person[], days: number): { p: Person; d: number } | null => {
-  let best: { p: Person; d: number } | null = null;
-  for (const p of members) {
-    if (p.deathDate || p.isSelf) continue;
-    const d = daysToBirthday(p.birthDate);
-    if (d !== null && d <= days && (!best || d < best.d)) best = { p, d };
-  }
-  return best;
-};
 
 /** そのグループに新しく入れる人の区分（メンバーに多い区分。いなければグループの種類から） */
 export const categoryForGroup = (data: AppData, group: Group): Category => {
@@ -61,7 +51,7 @@ export const categoryForGroup = (data: AppData, group: Group): Category => {
 
 // ------------------------------------------------------------ 目印
 
-/** グループの目印（絵文字、なければ種類の 1 文字）を色付きの角丸で */
+/** グループの目印（絵文字、なければ名前の 1 文字）を色付きの角丸で */
 export const GroupMark = ({ group, size = 40 }: { group: Group; size?: number }) => (
   <div
     className="group-icon"
@@ -75,7 +65,7 @@ export const GroupMark = ({ group, size = 40 }: { group: Group; size?: number })
       border: group.color ? `1.5px solid ${group.color}` : undefined,
     }}
   >
-    {group.emoji || GROUP_KIND_LABEL[group.kind].charAt(0)}
+    {group.emoji || [...group.name.trim()][0] || "?"}
   </div>
 );
 
