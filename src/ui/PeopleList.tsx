@@ -7,6 +7,7 @@ import { navigate } from "../router";
 import { alive, lastMetMap, useData } from "../store";
 import { Avatar, Icon, personSub } from "./common";
 import { ThisWeek } from "./ThisWeek";
+import { GroupDots, GroupMark, membersOf, sortGroups } from "./groupUtil";
 
 type Sort = "birthday" | "kana" | "recent" | "stale" | "added";
 
@@ -79,6 +80,20 @@ export const PeopleList = () => {
 
   return (
     <>
+      {groups.length > 0 && (
+        <div className="gshort">
+          {sortGroups(groups).slice(0, 10).map((g) => (
+            <button type="button" key={g.id} className="gshort-item" onClick={() => navigate(`/g/${g.id}`)}>
+              <GroupMark group={g} size={34} />
+              <span className="gshort-name">{g.name}</span>
+              <span className="gshort-n">{membersOf(data, g.id).length}人</span>
+            </button>
+          ))}
+          <button type="button" className="gshort-item more" onClick={() => navigate("/groups")}>
+            <span className="gshort-all">すべて</span>
+          </button>
+        </div>
+      )}
       <ThisWeek data={data} persons={persons} />
       <div className="sticky-head">
       <input className="search" type="search" placeholder="名前・所属・タグで検索" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -142,6 +157,7 @@ export const PeopleList = () => {
                       </span>
                     )}
                     {p.name}
+                    <GroupDots person={p} groups={groups} />
                   </div>
                   <div className="row-sub">{personSub(p, groups)}</div>
                 </div>

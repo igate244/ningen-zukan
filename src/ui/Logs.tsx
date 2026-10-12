@@ -82,14 +82,16 @@ export const LogsPage = ({ header }: { header?: ReactNode } = {}) => {
   );
 };
 
-export const LogEdit = ({ id, presetPersonId, presetDate, presetKind }: { id?: string; presetPersonId?: string; presetDate?: string; presetKind?: LogKind }) => {
+export const LogEdit = ({ id, presetPersonId, presetDate, presetKind, presetGroupId }: { id?: string; presetPersonId?: string; presetDate?: string; presetKind?: LogKind; presetGroupId?: string }) => {
   const original = id ? getData().logs.find((l) => l.id === id) : undefined;
   const [log, setLog] = useState<LogEntry>(() => {
     if (original) return original;
     const now = Date.now();
-    return { id: newId(), createdAt: now, updatedAt: now, date: presetDate || today(), personIds: presetPersonId ? [presetPersonId] : [], kind: presetKind ?? "meet", text: "" };
+    // グループから来たときは、メンバー全員（自分以外）を最初から入れておく
+    const groupMembers = presetGroupId ? alive(getData().persons).filter((p) => !p.isSelf && p.groups.includes(presetGroupId)).map((p) => p.id) : [];
+    return { id: newId(), createdAt: now, updatedAt: now, date: presetDate || today(), personIds: presetPersonId ? [presetPersonId] : groupMembers, kind: presetKind ?? "meet", text: "" };
   });
-  const [picking, setPicking] = useState(!original && !presetPersonId && presetKind !== "event");
+  const [picking, setPicking] = useState(!original && !presetPersonId && !presetGroupId && presetKind !== "event");
   const [error, setError] = useState<string | null>(null);
   const data = useData();
 
@@ -107,7 +109,7 @@ export const LogEdit = ({ id, presetPersonId, presetDate, presetKind }: { id?: s
       return;
     }
     await saveLog({ ...log, text: log.text.trim() });
-    goBack(presetPersonId ? `/p/${presetPersonId}` : "/logs");
+    goBack(presetPersonId ? `/p/${presetPersonId}` : presetGroupId ? `/g/${presetGroupId}` : "/logs");
   };
 
   const onDelete = async (): Promise<void> => {
@@ -120,7 +122,7 @@ export const LogEdit = ({ id, presetPersonId, presetDate, presetKind }: { id?: s
     <>
       <TopBar
         title={id ? "記録を編集" : "記録する"}
-        back={presetPersonId ? `/p/${presetPersonId}` : "/logs"}
+        back={presetPersonId ? `/p/${presetPersonId}` : presetGroupId ? `/g/${presetGroupId}` : "/logs"}
         right={<button type="button" className="text-btn" onClick={() => void onSave()}>保存</button>}
       />
       <main className="main">

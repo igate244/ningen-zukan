@@ -85,7 +85,7 @@ export const App = () => {
   if (a === "new") page = <PersonEdit />;
   else if (a === "p" && b && c === "edit") page = <PersonEdit key={b} id={b} />;
   else if (a === "p" && b) page = <PersonDetail key={b} id={b} initialTab={query.get("tab") ?? undefined} />;
-  else if (a === "log" && b === "new") page = <LogEdit presetPersonId={query.get("p") ?? undefined} presetDate={query.get("d") ?? undefined} presetKind={query.get("k") === "event" ? "event" : undefined} />;
+  else if (a === "log" && b === "new") page = <LogEdit presetPersonId={query.get("p") ?? undefined} presetDate={query.get("d") ?? undefined} presetKind={query.get("k") === "event" ? "event" : undefined} presetGroupId={query.get("g") ?? undefined} />;
   else if (a === "log" && b) page = <LogEdit key={b} id={b} />;
   else if (a === "logs") page = <TabShell title="記録" active="logs"><RecordsPage /></TabShell>;
   else if (a === "map") page = <TabShell title="相関図" active="map"><MapPage /></TabShell>;

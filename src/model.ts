@@ -87,6 +87,8 @@ export interface Person extends Base {
   tags: string[];
   /** 所属しているグループの ID */
   groups: string[];
+  /** グループの中での役割（グループ ID → 「班長」「幹事」など） */
+  groupRoles: Record<string, string>;
   /** 画像 ID（images テーブル） */
   photo?: string;
   /** 写真が無いときのアイコンの文字（未設定なら名前の 1 文字目） */
@@ -255,7 +257,16 @@ export interface Group extends Base {
   /** いつ頃の仲間か（例: 2004〜2010） */
   period?: string;
   note?: string;
+  /** 目印の色（GROUP_COLORS のどれか） */
+  color?: string;
+  /** 目印の絵文字・1 文字 */
+  emoji?: string;
+  /** よく見るグループとして上に出す */
+  pinned?: boolean;
 }
+
+/** グループの目印に使える色（明るい背景・暗い背景どちらでも見える中間の色） */
+export const GROUP_COLORS = ["#d0705f", "#d9934a", "#c9a93a", "#6fa86b", "#4f9a8e", "#5a8fc0", "#8a7fc2", "#b87aa8", "#8c8c8c"];
 
 export interface AppData {
   persons: Person[];
@@ -281,6 +292,7 @@ export const emptyPerson = (name = ""): Person => {
     tags: [],
     groups: [],
     custom: [],
+    groupRoles: {},
     nextTopics: [],
     favors: [],
   };
@@ -294,6 +306,7 @@ export const normalizePerson = (raw: Partial<Person> & { id: string }): Person =
     tags: Array.isArray(raw.tags) ? raw.tags : [],
     groups: Array.isArray(raw.groups) ? raw.groups : [],
     custom: Array.isArray(raw.custom) ? raw.custom : [],
+    groupRoles: raw.groupRoles && typeof raw.groupRoles === "object" ? raw.groupRoles : {},
     nextTopics: Array.isArray(raw.nextTopics) ? raw.nextTopics : [],
     favors: Array.isArray(raw.favors) ? raw.favors : [],
     category: toCategory(raw.category),

@@ -79,8 +79,12 @@ export const PersonDetail = ({ id, initialTab }: { id: string; initialTab?: stri
             {person.deathDate && <span className="badge">故人</span>}
             {person.groups.map((gid) => {
               const g = (data.groups ?? []).find((x) => x.id === gid && !x.deleted);
+              const role = person.groupRoles[gid];
               return g ? (
-                <button type="button" className="badge accent link" key={gid} onClick={() => navigate(`/g/${gid}`)}>{g.name}</button>
+                <button type="button" className="badge accent link" key={gid} onClick={() => navigate(`/g/${gid}`)}
+                  style={g.color ? { borderColor: g.color, color: g.color, background: `color-mix(in srgb, ${g.color} 14%, var(--surface))` } : undefined}>
+                  {g.emoji ? `${g.emoji} ` : ""}{g.name}{role ? `・${role}` : ""}
+                </button>
               ) : null;
             })}
             {person.tags.map((t) => (
